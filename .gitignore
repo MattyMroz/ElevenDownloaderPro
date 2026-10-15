@@ -1,0 +1,6 @@
+.browser-profile/
+.chrome-profile/
+*.mp3
+__pycache__/
+
+nagranie_*.txt
