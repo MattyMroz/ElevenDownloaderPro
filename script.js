@@ -44,30 +44,6 @@
     const OriginalWebSocket = window.WebSocket;
     window.WebSocket = function (url, protocols) {
         const ws = new OriginalWebSocket(url, protocols);
-        // DEBUG (tymczasowe): diagnoza zatrzymywania się audio
-        let lastAudioAt = 0;
-        console.log('[EDP] WS open', url);
-        ws.addEventListener('close', (e) => console.log('[EDP] WS close', e.code, e.reason, url));
-        ws.addEventListener('error', () => console.log('[EDP] WS error', url));
-        ws.addEventListener('message', function (event) {
-            if (typeof event.data !== 'string') {
-                console.log('[EDP] binary msg', event.data);
-            } else {
-                try {
-                    const d = JSON.parse(event.data);
-                    if (d && d.audio) {
-                        const now = Date.now();
-                        if (lastAudioAt && now - lastAudioAt > 5000) console.log('[EDP] audio gap ms', now - lastAudioAt);
-                        lastAudioAt = now;
-                    }
-                    const { audio, ...rest } = d || {};
-                    if (!audio || rest.isFinal) console.log('[EDP] msg', JSON.stringify(rest).slice(0, 500));
-                } catch (e) {
-                    console.log('[EDP] non-JSON msg', event.data.slice(0, 300));
-                }
-            }
-        });
-        // END DEBUG
         ws.addEventListener('message', function (event) {
             if (isPassive || !isRecording) return;
             try {
