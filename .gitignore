@@ -1,6 +1,376 @@
-.browser-profile/
-.chrome-profile/
-*.mp3
-__pycache__/
+# ── Sections ──────────────────────────────────────────────────────────────────
+#   1. AI agents      5. Editors & OS    9. Project-specific
+#   2. Secrets        6. Scratch & logs  10. Re-includes
+#   3. Python (uv)    7. Binaries        11. Final invariants — keep last
+#   4. Node / Bun     8. Other stacks
+#
+#   Order is load-bearing: last match wins, so each section overrides the ones
+#   above it. Paste foreign templates into section 8, never at the end.
+#   Mixed folder: `dir/*` + `!dir/keeper`, never `dir/` + `!dir/keeper`
+# ──────────────────────────────────────────────────────────────────────────────
 
-nagranie_*.txt
+# ── AI agents ─────────────────────────────────────────────────────────────────
+.claude/*
+.codex/*
+.agents/
+
+# ── AI agents: other tools — uncomment what you use ───────────────────────────
+# .cursor/*
+# !.cursor/rules/
+# .windsurf/
+# .clinerules/
+# .kiro/
+# .qoder/
+# .opencode/
+# .openclaw/
+# .aider*
+# .continue/
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
+.env
+.env.*
+.envrc
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.asc
+*.gpg
+*.ppk
+credentials.json
+secrets.json
+secrets.enc
+*-token.txt
+*.token
+
+# ── Python (uv) ───────────────────────────────────────────────────────────────
+__pycache__/
+*.py[codz]
+*$py.class
+.Python
+build/
+dist/
+sdist/
+wheels/
+*.egg-info/
+*.egg
+MANIFEST
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+.uv-cache/
+.import_linter_cache/
+cython_debug/
+.pypirc
+.ipynb_checkpoints/
+
+# ── Node / Bun / Vite ─────────────────────────────────────────────────────────
+node_modules/
+dist/
+out/
+.output/
+.vite/
+vite.config.*.timestamp-*
+*.tsbuildinfo
+next-env.d.ts
+.npm
+.eslintcache
+.stylelintcache
+*.tgz
+.pnpm-store/
+.turbo/
+.parcel-cache/
+.cache/
+coverage/
+.nyc_output/
+.next/
+.nuxt/
+.svelte-kit/
+.astro/
+.docusaurus/
+.vercel/
+.netlify/
+**/.vitepress/dist
+**/.vitepress/cache
+
+# ── Rust / Tauri ──────────────────────────────────────────────────────────────
+# `target/` alone already matches at any depth (frontend/src-tauri/target/).
+# `**/` is only needed when the pattern itself contains a slash, like the next one.
+target/
+**/src-tauri/gen/
+**/*.rs.bk
+*.pdb
+rustc-ice-*.txt
+
+# ── Editors ───────────────────────────────────────────────────────────────────
+.vscode/*
+.idea/*
+*.vsix
+.vscode-test/
+*.swp
+*.swo
+*~
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.stackdump
+*.lnk
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+nohup.out
+
+# ── Scratch & logs ────────────────────────────────────────────────────────────
+temp/
+tmp/
+logs/
+*.log
+*.log.*
+*.cache
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*.dump
+*.pid
+*.pid.lock
+*.seed
+
+# ── Binaries: images ──────────────────────────────────────────────────────────
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.webp
+*.avif
+*.jxl
+*.tif
+*.tiff
+*.ico
+*.heic
+*.heif
+*.psd
+*.xcf
+*.dng
+
+# ── Binaries: video & audio ───────────────────────────────────────────────────
+# No *.ts here — that is TypeScript, not MPEG transport stream.
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.webm
+*.m4v
+*.wmv
+*.flv
+*.mpg
+*.mpeg
+*.m2ts
+*.mp3
+*.wav
+*.flac
+*.ogg
+*.opus
+*.aac
+*.m4a
+*.ac3
+*.eac3
+*.dts
+
+# ── Binaries: ML models & weights ─────────────────────────────────────────────
+*.onnx
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.h5
+*.hdf5
+*.pb
+*.tflite
+*.weights
+*.gguf
+*.ggml
+*.engine
+*.trt
+*.caffemodel
+*.mlmodel
+*.joblib
+*.bin
+
+# ── Binaries: datasets & serialized data ──────────────────────────────────────
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.arrow
+*.npy
+*.npz
+*.msgpack
+*.pickle
+*.pkl
+*.dat
+
+# ── Binaries: databases ───────────────────────────────────────────────────────
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+
+# ── Binaries: archives & installers ───────────────────────────────────────────
+*.zip
+*.tar
+*.tar.*
+*.gz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.iso
+*.dmg
+*.deb
+*.rpm
+*.msi
+*.AppImage
+
+# ── Binaries: compiled objects ────────────────────────────────────────────────
+*.exe
+*.dll
+*.dylib
+*.so
+*.a
+*.lib
+*.o
+*.obj
+
+# ── Python extras ─────────────────────────────────────────────────────────────
+# .ipynb_checkpoints/          Jupyter
+# local_settings.py            Django
+# instance/                    Flask
+# celerybeat-schedule*         Celery
+# .pixi/*                      pixi
+# Pipfile.lock                 pipenv
+
+# ── Other stacks — PASTE FOREIGN TEMPLATES HERE, NOT AT THE END ───────────────
+# Go, Java, .NET, PHP, Ruby, Terraform, Docker and ~500 more:
+# github.com/github/gitignore — paste below this line.
+# Everything after this section overrides templates, which is the point.
+
+# ── Project-specific — fill in, delete the rest ───────────────────────────────
+workspace/**
+!workspace/**/
+!workspace/**/.gitkeep
+.chrome-profile/
+.browser-profile/
+recording_*.txt
+
+# ── Re-includes ───────────────────────────────────────────────────────────────
+# Every keeper lives HERE, not next to the rule it escapes — a template pasted
+# into section 8 would otherwise bury negations written above it.
+# Order inside: `!dir/` and `!dir/**/` first, so git can descend; then files.
+# Never `!dir/**` — that also lets video and model weights back in.
+
+# Hand-written config
+!.claude/
+!.claude/settings.json
+!.claude/commands/
+!.codex/hooks.json
+!.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+!.idea/
+!.idea/runConfigurations/
+!.env.example
+!.env.sample
+!.env.template
+
+# Committed assets — bundlers also keep them in src/assets, not just assets/
+!**/assets/
+!**/assets/**/
+!public/
+!public/**/
+!docs/
+!docs/**/
+!**/src-tauri/icons/**
+!**/assets/**/*.png
+!**/assets/**/*.jpg
+!**/assets/**/*.jpeg
+!**/assets/**/*.webp
+!**/assets/**/*.svg
+!**/assets/**/*.ico
+!public/**/*.png
+!public/**/*.jpg
+!public/**/*.jpeg
+!public/**/*.webp
+!public/**/*.svg
+!public/**/*.ico
+!docs/**/*.png
+!docs/**/*.jpg
+!docs/**/*.svg
+
+# Test fixtures — small by definition, and the tests need them in git
+!**/fixtures/
+!**/fixtures/**/
+!**/fixtures/**/*.csv
+!**/fixtures/**/*.tsv
+!**/fixtures/**/*.parquet
+!**/fixtures/**/*.png
+!**/fixtures/**/*.jpg
+!**/fixtures/**/*.jpeg
+!**/fixtures/**/*.webp
+!**/fixtures/**/*.gif
+!**/fixtures/**/*.ico
+!**/fixtures/**/*.zip
+!**/fixtures/**/*.bin
+
+# ── Project overrides — ignores that must beat the re-includes above ──────────
+# docs/session-logs/
+# public/uploads/
+
+# ── Final invariants — MUST STAY LAST ─────────────────────────────────────────
+# Enforced, not documented: last match wins, so nothing above can bury these.
+!uv.lock
+!bun.lock
+!bun.lockb
+!Cargo.lock
+!package-lock.json
+!pnpm-lock.yaml
+!yarn.lock
+!.python-version
+!.nvmrc
+!.gitignore
+!.gitattributes

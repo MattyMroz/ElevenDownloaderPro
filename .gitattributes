@@ -1,0 +1,155 @@
+# ── Line endings ──────────────────────────────────────────────────────────────
+# Force LF everywhere regardless of core.autocrlf on the machine. Without this a
+# .sh checked out on Windows gets CRLF and dies on Linux: "bad interpreter: ^M".
+# After adding this file to an existing repo, run once: git add --renormalize .
+* text=auto eol=lf
+
+# Windows-only shells genuinely need CRLF. PowerShell is cross-platform now, so
+# it stays on LF — uncomment only for scripts that must run on Windows alone.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+# *.ps1 text eol=crlf
+
+# ── Binary — never normalize, never diff, never text-merge ────────────────────
+# `binary` is shorthand for `-text -diff -merge`.
+# Mirrors the BINARY formats from universal.gitignore, so behaviour stays correct
+# when a project deliberately re-includes one of them. Text-based datasets are
+# deliberately absent: *.csv and *.tsv stay text and keep a readable diff.
+
+# images
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.bmp binary
+*.webp binary
+*.avif binary
+*.jxl binary
+*.tif binary
+*.tiff binary
+*.ico binary
+*.heic binary
+*.psd binary
+*.xcf binary
+*.dng binary
+*.pdf binary
+
+# video
+*.mp4 binary
+*.mkv binary
+*.avi binary
+*.mov binary
+*.webm binary
+*.m4v binary
+*.wmv binary
+*.flv binary
+*.mpg binary
+*.mpeg binary
+*.m2ts binary
+
+# audio
+*.mp3 binary
+*.wav binary
+*.flac binary
+*.ogg binary
+*.opus binary
+*.aac binary
+*.m4a binary
+*.ac3 binary
+*.eac3 binary
+*.dts binary
+
+# ML models and weights
+*.onnx binary
+*.safetensors binary
+*.ckpt binary
+*.pt binary
+*.pth binary
+*.h5 binary
+*.hdf5 binary
+*.pb binary
+*.tflite binary
+*.weights binary
+*.gguf binary
+*.ggml binary
+*.engine binary
+*.trt binary
+*.caffemodel binary
+*.mlmodel binary
+*.joblib binary
+*.bin binary
+
+# datasets and serialized data
+*.parquet binary
+*.feather binary
+*.arrow binary
+*.npy binary
+*.npz binary
+*.msgpack binary
+*.pickle binary
+*.pkl binary
+*.dat binary
+
+# databases — the -wal/-shm/-journal suffix follows the db filename
+*.db binary
+*.db-* binary
+*.sqlite binary
+*.sqlite-* binary
+*.sqlite3 binary
+*.sqlite3-* binary
+
+# archives and installers
+*.zip binary
+*.tar binary
+*.tar.* binary
+*.gz binary
+*.bz2 binary
+*.xz binary
+*.7z binary
+*.rar binary
+*.iso binary
+*.dmg binary
+*.deb binary
+*.rpm binary
+*.msi binary
+*.AppImage binary
+*.bundle binary
+
+# compiled objects
+*.exe binary
+*.dll binary
+*.dylib binary
+*.so binary
+*.a binary
+*.lib binary
+*.o binary
+*.obj binary
+
+# fonts
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+
+# ── Generated files — collapse noisy diffs, keep them readable ────────────────
+# linguist-generated hides these in GitHub diffs and language stats BY DEFAULT,
+# but the diff can still be expanded — unlike `-diff`, which shows only
+# "Binary files differ" and hides which dependency actually changed.
+# Lockfiles stay committed and merge normally either way.
+uv.lock linguist-generated
+bun.lock linguist-generated
+Cargo.lock linguist-generated
+package-lock.json linguist-generated
+pnpm-lock.yaml linguist-generated
+yarn.lock linguist-generated
+bun.lockb binary
+
+# ── GitHub language stats — keep borrowed code out of the graph ───────────────
+# external/** linguist-vendored
+# docs/** linguist-documentation
+
+# ── Git LFS — off on purpose ──────────────────────────────────────────────────
+# The paired .gitignore blocks models, datasets and archives by default, so LFS
+# rules would never fire. Enable only in a repository that intentionally
+# versions large binaries; hosting quotas depend on provider and plan.
+#   *.safetensors filter=lfs diff=lfs merge=lfs -text
