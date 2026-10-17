@@ -31,53 +31,59 @@ A powerful Tampermonkey userscript that allows you to download audio directly fr
     *   Manually click **DOWNLOAD** to save the `.mp3` file immediately.
 4.  **Passive Mode:** Click **PASSIVE MODE** if you just want to listen to the text normally without recording.
 
-## 🐍 Wersja Python: `downloader.py` (zalecana)
+## Python version: `downloader.py` (recommended)
 
-Uruchamia Twojego Google Chrome (osobny profil) i zapisuje audio prosto na dysk w trakcie nagrywania. Nie ma limitu RAM-u ani timera ciszy, który dzielił pliki w userscripcie.
+Launches your installed Google Chrome with its own profile and writes the audio straight to disk while recording. There is no RAM limit and no silence timer, which split the files in the userscript.
 
-### Instalacja
+### Installation
 
-```
-pip install playwright
-```
+Requires [uv](https://docs.astral.sh/uv/) and Google Chrome. `uv run` creates the `.venv` environment and installs the dependencies on first use, so there is no manual setup.
 
-Wymaga zainstalowanego Google Chrome.
+### Running
 
-### Uruchomienie
-
-```
-python downloader.py --url "https://elevenreader.io/reader/library/u:TWOJ_DOKUMENT"
+```bash
+uv run downloader.py --url "https://elevenreader.io/reader/library/u:YOUR_DOCUMENT"
 ```
 
-* Bez nazwy pliku nagranie trafia do pierwszego wolnego `nagranie_1.mp3`, `nagranie_2.mp3`, ...
-* Z nazwą, np. `python downloader.py ksiazka.mp3 --url "..."`, zapisuje do `ksiazka.mp3`. Jeśli plik istnieje, **dopisuje na końcu**. Tak dogrywasz resztę po przerwie.
-* `--speed 32` zmienia przyspieszenie (domyślnie 16).
-* `--chrome "C:\...\chrome.exe"` podaje ścieżkę, jeśli Chrome jest w nietypowym miejscu.
+- Without a file name the recording goes to the first free `workspace/output/recording_N.mp3`.
+- With a name, e.g. `uv run downloader.py workspace/output/book.mp3 --url "..."`, it writes to that file. An existing file is **appended to**, which is how you finish a recording after a break.
+- `--speed 32` changes the speed-up (default 16).
+- `--chrome "C:\...\chrome.exe"` sets the path when Chrome is installed in a non-standard location.
 
-### Jak używać
+### Usage
 
-1. Uruchom skrypt. Za pierwszym razem zaloguj się w otwartym Chrome (sesja zapisuje się w `.chrome-profile/`).
-2. Wejdź w dokument i przewiń na początek. Na starcie nic się nie nagrywa, strona gra normalnie.
-3. **Kliknij w okno terminala i wciśnij SPACJĘ.** Pojawi się `NAGRYWAM (16.0x)`.
-4. Kliknij **play** w Chrome.
-5. Gdy `zapisano X MB` przestanie rosnąć, a odtwarzacz dojdzie do końca, wciśnij **Ctrl+C** w terminalu.
+1. Run the script. The first time, sign in inside the opened Chrome (the session is kept in `.chrome-profile/`).
+2. Open the document and move to its beginning. Nothing is recorded at start and the page plays at normal speed.
+3. **Click the terminal window and press SPACE.** It prints `RECORDING (16.0x)`.
+4. Press **play** in Chrome.
+5. When `saved X MB` stops growing and the player reaches the end, press **Ctrl+C** in the terminal.
 
-Klawisze (działają, gdy aktywne jest okno terminala):
+Keys work while the terminal window is focused:
 
-| Klawisz | Działanie |
-|---|---|
-| Spacja | nagrywaj / pauza |
-| C | wyczyść plik (np. gdy na początek wpadło coś zbędnego) |
-| Ctrl+C | koniec |
+| Key    | Action                                                    |
+| ------ | --------------------------------------------------------- |
+| Space  | record / pause                                            |
+| C      | clear the file (e.g. when unwanted audio got in at start) |
+| Ctrl+C | quit                                                      |
 
-### Dobrze wiedzieć
+### Folder layout
 
-* Serwer wysyła audio paczkami, czasem dużymi porcjami naraz. Komunikat `serwer wysłał następną paczkę po X s` to tylko czekanie, w pliku nic nie brakuje.
-* Kiedy terminal stoi, a strona dalej gra, strona odtwarza to, co już jest w pliku. Czekaj: gdy odtwarzacz dojdzie do końca bufora, serwer przyśle kolejną część.
-* Podczas nagrywania nie klikaj w tekst dokumentu. Przeskok nagra inne miejsce. Najpierw wciśnij spację (pauza).
-* Identyczne powtórzone paczki są pomijane (`pominięto powtórzony fragment`).
-* Jeśli serwer wysyła tekst razem z audio, terminal pokazuje go na bieżąco, a całość trafia do pliku `.txt` obok `.mp3`.
-* Jeden Chrome, jedna karta z dokumentem naraz. Inaczej audio się wymiesza.
+```text
+workspace/
+  input/    input files (e.g. .txt for future automation)
+  output/   finished .mp3 recordings and their .txt text
+```
+
+The contents of `workspace/` are ignored by git; only the folders are kept (`.gitkeep`).
+
+### Good to know
+
+- The server sends audio in batches, sometimes large ones at once. `next chunk arrived after X s` only means waiting; nothing is missing in the file.
+- When the terminal is quiet but the page keeps playing, the page is playing audio that is already in the file. Wait: when the player reaches the end of its buffer, the server sends the next part.
+- Do not click in the document text while recording; a jump records a different place. Press SPACE (pause) first.
+- Identical repeated chunks are skipped (`skipped duplicate chunk`).
+- The server sends the text with the audio: the terminal shows it live and the whole text goes to a `.txt` file next to the `.mp3`.
+- One Chrome and one document tab at a time, otherwise the audio gets mixed.
 
 ## ⚠️ Disclaimer
 
