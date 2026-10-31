@@ -57,12 +57,6 @@ repos:
       - id: forbid-submodules
       - id: destroyed-symlinks
 
-  - repo: https://github.com/pre-commit/pygrep-hooks
-    rev: v1.10.0
-    hooks:
-      # U+FFFD is what a botched encoding leaves behind.
-      - id: text-unicode-replacement-char
-
   # Fill in --scopes: keep repo and docs, add one scope per top-level area.
   # It rejects `Revert "..."`, which git writes itself. After git revert,
   # rewrite the subject as revert(scope): ... — `revert` is on the type list.
@@ -87,8 +81,10 @@ repos:
           - revert
 
   - repo: https://github.com/MattyMroz/agents
-    rev: hooks-v1.1.0 # or newer: prek autoupdate
+    rev: hooks-v1.2.0 # or newer: prek autoupdate
     hooks:
+      # U+FFFD is what a botched encoding leaves behind.
+      - id: no-replacement-char
       # Commit body: summary + Validation block bound to recorded runs.
       # Format and the mm-validate workflow: presets/hooks/references/commit-message.md
       - id: commit-validation
@@ -146,7 +142,7 @@ repos:
   # Count the violations in the existing code first; a hook with a backlog
   # blocks every commit. Keep it only at zero.
   - repo: https://github.com/MattyMroz/agents
-    rev: hooks-v1.1.0
+    rev: hooks-v1.2.0
     hooks:
       - id: const-docstrings
       - id: no-test-prose
