@@ -81,7 +81,7 @@ repos:
           - revert
 
   - repo: https://github.com/MattyMroz/agents
-    rev: hooks-v1.3.0 # or newer: prek autoupdate
+    rev: hooks-v1.3.1 # or newer: prek autoupdate
     hooks:
       # U+FFFD is what a botched encoding leaves behind.
       - id: no-replacement-char
@@ -142,7 +142,7 @@ repos:
   # Count the violations in the existing code first; a hook with a backlog
   # blocks every commit. Keep it only at zero.
   - repo: https://github.com/MattyMroz/agents
-    rev: hooks-v1.3.0
+    rev: hooks-v1.3.1
     hooks:
       - id: const-docstrings
       - id: no-test-prose
