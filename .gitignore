@@ -13,6 +13,7 @@
 .claude/*
 .codex/*
 .agents/
+.worktrees/*
 
 # ── AI agents: other tools — uncomment what you use ───────────────────────────
 # .cursor/*
@@ -305,7 +306,8 @@ recording_*.txt
 !.claude/
 !.claude/settings.json
 !.claude/commands/
-!.codex/hooks.json
+!.worktrees/
+!.worktrees/.gitkeep
 !.vscode/
 !.vscode/settings.json
 !.vscode/tasks.json

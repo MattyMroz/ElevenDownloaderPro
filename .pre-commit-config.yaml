@@ -1,0 +1,166 @@
+# Git hooks — one file, blocks marked by what the repo tracks.
+#
+# Copy to <project>/.pre-commit-config.yaml, DELETE the blocks and hooks that do
+# not apply (each block header says when it stays), fill in the scopes, then:
+#
+#   git config --local core.autocrlf false     # or mixed-line-ending loops forever
+#   prek install                               # or: uv run pre-commit install
+#   prek run --all-files                       # build environments before first commit
+#
+# DELETE blocks, do not comment them out — prek's check-yaml rejects long runs of
+# comment lines (j178/prek#2501).
+#
+# A vendored subproject with its own .pre-commit-config.yaml runs as a separate
+# prek project. Keep it out: list its directory in a root .prekignore
+# (gitignore syntax), then `prek list --refresh`.
+#
+# After editing, verify no hook is left without files:
+#   prek run --hook-stage manual --all-files
+
+minimum_pre_commit_version: "4.0.0"
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+default_stages: [pre-commit]
+
+# downloader.py uses Python 3.14 syntax; older hook interpreters cannot parse it.
+default_language_version:
+  python: python3.14
+
+repos:
+# ── CORE — mandatory, every hook here has files in any repo, do not delete ────
+
+  - repo: meta
+    hooks:
+      - id: check-hooks-apply
+        stages: [manual]
+      - id: check-useless-excludes
+        stages: [manual]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      # Fixes the file, then fails the commit. Run `git add` and commit again.
+      - id: trailing-whitespace
+        # Two trailing spaces are a hard line break in Markdown.
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: fix-byte-order-marker
+      # Refuses only, changes nothing.
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-case-conflict
+      - id: check-illegal-windows-names
+      - id: detect-private-key
+      - id: forbid-submodules
+      - id: destroyed-symlinks
+
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: v1.10.0
+    hooks:
+      # U+FFFD is what a botched encoding leaves behind.
+      - id: text-unicode-replacement-char
+
+  # Fill in --scopes: keep repo and docs, add one scope per top-level area.
+  # It rejects `Revert "..."`, which git writes itself. After git revert,
+  # rewrite the subject as revert(scope): ... — `revert` is on the type list.
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args:
+          - --force-scope
+          - --scopes=repo,docs,downloader,userscript,deps
+          - feat
+          - fix
+          - chore
+          - docs
+          - refactor
+          - test
+          - perf
+          - style
+          - ci
+          - build
+          - revert
+
+  - repo: https://github.com/MattyMroz/agents
+    rev: hooks-v1.1.0 # or newer: prek autoupdate
+    hooks:
+      # Commit body: summary + Validation block bound to recorded runs.
+      # Format and the mm-validate workflow: presets/hooks/references/commit-message.md
+      - id: commit-validation
+
+# ── DATA FILES — keep each hook only if the repo tracks that file type ────────
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-json # *.json
+      - id: check-toml # *.toml
+
+# ── SPELLING — delete unless the repo has source code ─────────────────────────
+
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.49.0
+    hooks:
+      # Reports only: its dictionary is English, and with the default
+      # --write-changes it rewrote Polish words into English ones.
+      # Count its findings on main first: Polish words in code are findings
+      # too, and a hook with a backlog blocks every commit. Keep it only at
+      # zero; a later false positive goes to _typos.toml [default.extend-words].
+      - id: typos
+        args: [--force-exclude]
+        types_or: [python, pyi, javascript, jsx, ts, tsx, rust, shell]
+
+# ── MARKDOWN — delete unless the repo carries prose worth formatting ──────────
+
+  - repo: https://github.com/hukkin/mdformat
+    rev: 0.7.22
+    hooks:
+      - id: mdformat
+        args: [--number]
+        # Without these plugins it wrecks GFM tables.
+        additional_dependencies:
+          - mdformat-gfm==0.4.1
+          - mdformat-tables==1.0.0
+          - mdformat-frontmatter==2.0.8
+
+# ── PYTHON — delete unless the repo tracks *.py files ─────────────────────────
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-ast
+      - id: debug-statements
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.2
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  # Count the violations in the existing code first; a hook with a backlog
+  # blocks every commit. Keep it only at zero.
+  - repo: https://github.com/MattyMroz/agents
+    rev: hooks-v1.1.0
+    hooks:
+      - id: const-docstrings
+      - id: no-test-prose
+
+# ── PYTHON PROJECT — delete unless pyproject.toml exists ──────────────────────
+
+  - repo: local
+    hooks:
+      # Slow gates belong on push, not on every commit. Keep only the tools the
+      # project has and only gates that pass on the current main: a red gate
+      # blocks every push.
+      - id: mypy
+        name: mypy
+        entry: uv run mypy .
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
