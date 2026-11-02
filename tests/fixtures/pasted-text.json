@@ -1,0 +1,170 @@
+{
+  "audio": "pasted-text.mp3",
+  "voice": "fronczewski",
+  "duration_ms": 6138.775510204082,
+  "parts": [
+    {
+      "index": 0,
+      "text": "Pierwsza kwestia [śmiech].",
+      "start_ms": 0.0,
+      "end_ms": 1768.5,
+      "spoken": true
+    },
+    {
+      "index": 1,
+      "text": "— Druga, z dialogiem — powiedział.",
+      "start_ms": 2086.0,
+      "end_ms": 4316.5,
+      "spoken": true
+    },
+    {
+      "index": 2,
+      "text": "Trzecia część, której serwer nie wypowie mimo pełnego tekstu w porcji.",
+      "start_ms": 4675.918367346939,
+      "end_ms": 4675.918367346939,
+      "spoken": false
+    },
+    {
+      "index": 3,
+      "text": "Czwarta i ostatnia…",
+      "start_ms": 4702.040816326531,
+      "end_ms": 6026.040816326531,
+      "spoken": true
+    }
+  ],
+  "words": [
+    {
+      "text": "Pierwsza",
+      "start_ms": 0.0,
+      "end_ms": 550.0
+    },
+    {
+      "text": "kwestia",
+      "start_ms": 590.0,
+      "end_ms": 1073.0
+    },
+    {
+      "text": "(śmiech).",
+      "start_ms": 1113.0,
+      "end_ms": 1768.5
+    },
+    {
+      "text": "…",
+      "start_ms": 1888.5,
+      "end_ms": 1966.0
+    },
+    {
+      "text": "—",
+      "start_ms": 2086.0,
+      "end_ms": 2149.5
+    },
+    {
+      "text": "Druga,",
+      "start_ms": 2189.5,
+      "end_ms": 2637.0
+    },
+    {
+      "text": "z",
+      "start_ms": 2677.0,
+      "end_ms": 2747.5
+    },
+    {
+      "text": "dialogiem",
+      "start_ms": 2787.5,
+      "end_ms": 3429.0
+    },
+    {
+      "text": "—",
+      "start_ms": 3469.0,
+      "end_ms": 3532.5
+    },
+    {
+      "text": "powiedział.",
+      "start_ms": 3572.5,
+      "end_ms": 4316.5
+    },
+    {
+      "text": "…",
+      "start_ms": 4436.5,
+      "end_ms": 4514.0
+    },
+    {
+      "text": "Trzecia",
+      "start_ms": 4675.918367346939,
+      "end_ms": 4682.918367346939
+    },
+    {
+      "text": "część,",
+      "start_ms": 4683.918367346939,
+      "end_ms": 4689.918367346939
+    },
+    {
+      "text": "której",
+      "start_ms": 4690.918367346939,
+      "end_ms": 4696.918367346939
+    },
+    {
+      "text": "serwer",
+      "start_ms": 4697.918367346939,
+      "end_ms": 4703.918367346939
+    },
+    {
+      "text": "nie",
+      "start_ms": 4704.918367346939,
+      "end_ms": 4707.918367346939
+    },
+    {
+      "text": "wypowie",
+      "start_ms": 4708.918367346939,
+      "end_ms": 4715.918367346939
+    },
+    {
+      "text": "mimo",
+      "start_ms": 4716.918367346939,
+      "end_ms": 4720.918367346939
+    },
+    {
+      "text": "pełnego",
+      "start_ms": 4721.918367346939,
+      "end_ms": 4728.918367346939
+    },
+    {
+      "text": "tekstu",
+      "start_ms": 4729.918367346939,
+      "end_ms": 4735.918367346939
+    },
+    {
+      "text": "w",
+      "start_ms": 4736.918367346939,
+      "end_ms": 4737.918367346939
+    },
+    {
+      "text": "porcji.",
+      "start_ms": 4738.918367346939,
+      "end_ms": 4745.918367346939
+    },
+    {
+      "text": "…",
+      "start_ms": 4767.918367346939,
+      "end_ms": 4768.918367346939
+    },
+    {
+      "text": "Czwarta",
+      "start_ms": 4702.040816326531,
+      "end_ms": 5209.540816326531
+    },
+    {
+      "text": "i",
+      "start_ms": 5249.540816326531,
+      "end_ms": 5309.540816326531
+    },
+    {
+      "text": "ostatnia…",
+      "start_ms": 5349.540816326531,
+      "end_ms": 6026.040816326531
+    }
+  ],
+  "silent": [
+    2
+  ]
+}
