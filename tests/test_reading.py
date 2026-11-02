@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import itertools
 import json
 from pathlib import Path
@@ -11,7 +12,7 @@ from fakes import READ_ID, FakePage, FakeSession, FakeSite, ScriptedEngine, stre
 
 from edp import reading
 from edp.engine import service
-from edp.errors import TtsAuthError, TtsInputError, TtsTimeoutError
+from edp.errors import OutputError, TtsAuthError, TtsInputError, TtsTimeoutError
 from edp.reading import read_id_from_url, record, text_lines
 from edp.utils.mp3_frames import frames_duration_ms, iter_frames
 
@@ -104,6 +105,67 @@ def test_record_writes_mp3_json_and_srt_next_to_the_text(tmp_path: Path, monkeyp
     assert result.srt.read_text(encoding="utf-8").count(" --> ") == 4
     assert engine.documents == [("0", "1", "2", "3")]
     assert engine.closed
+
+
+def test_record_dotted_text_name_keeps_every_dot_in_the_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use(monkeypatch, ScriptedEngine(tmp_path))
+
+    first = record(_text(tmp_path, *LINES, name="rozdzial 1.5"), home=tmp_path)
+    second = record(_text(tmp_path, *LINES, name="rozdzial 1.6"), home=tmp_path)
+
+    assert (first.mp3.name, first.json.name, first.srt.name) == (
+        "rozdzial 1.5.mp3",
+        "rozdzial 1.5.json",
+        "rozdzial 1.5.srt",
+    )
+    assert second.mp3.name == "rozdzial 1.6.mp3"
+    assert json.loads(first.json.read_text(encoding="utf-8"))["audio"] == "rozdzial 1.5.mp3"
+
+
+def test_record_unwritable_output_folder_is_refused_before_recording(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = ScriptedEngine(tmp_path)
+    _use(monkeypatch, engine)
+    blocker = tmp_path / "plik"
+    blocker.write_text("", encoding="utf-8")
+
+    with pytest.raises(OutputError):
+        record(_text(tmp_path, *LINES), out_dir=blocker / "wyniki", home=tmp_path)
+
+    assert engine.calls == 0
+    assert engine.closed
+
+
+def test_record_failing_to_write_results_keeps_the_recordings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _use(monkeypatch, ScriptedEngine(tmp_path))
+
+    def full_disk(path: Path, data: bytes | str) -> None:
+        raise OSError(errno.ENOSPC, "No space left on device", str(path))
+
+    monkeypatch.setattr(reading, "_write_atomic", full_disk)
+
+    with pytest.raises(OutputError) as error:
+        record(_text(tmp_path, *LINES), home=tmp_path)
+
+    kept = Path(error.value.context.details["recordings"])
+    assert kept.parent == tmp_path
+    assert [path.name for path in kept.iterdir()] == ["0.mp3"]
+    assert error.value.context.details["error"] == "No space left on device"
+
+
+def test_record_succeeding_leaves_no_working_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _use(monkeypatch, ScriptedEngine(tmp_path))
+
+    record(_text(tmp_path, *LINES), out_dir=tmp_path / "wyniki", home=tmp_path)
+
+    assert sorted(path.name for path in (tmp_path / "wyniki").iterdir()) == [
+        "rozdzial.json",
+        "rozdzial.mp3",
+        "rozdzial.srt",
+    ]
 
 
 def test_record_out_dir_receives_the_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -331,11 +393,12 @@ def test_record_chunk_streamed_before_play_is_in_mp3_and_words(tmp_path: Path, m
 def test_download_writes_three_files_without_parts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     site = FakeSite(texts=("Pierwsza kwestia. Druga kwestia.",), player_done=True)
     monkeypatch.setattr(service, "headless_session", _fake_browser(site))
-    out = tmp_path / "ksiazka.mp3"
+    out = tmp_path / "ksiazka.v2.mp3"
 
     result = reading.download(f"https://elevenreader.io/reader/library/{READ_ID}", out=out, home=tmp_path)
 
-    assert (result.mp3, result.json, result.srt) == (out, tmp_path / "ksiazka.json", tmp_path / "ksiazka.srt")
+    assert (result.mp3, result.json, result.srt) == (out, tmp_path / "ksiazka.v2.json", tmp_path / "ksiazka.v2.srt")
+    assert sorted(path.name for path in tmp_path.iterdir() if path.name.startswith(".")) == []
     described = json.loads(result.json.read_text(encoding="utf-8"))
     assert described["parts"] == []
     assert described["silent"] == []
@@ -343,3 +406,28 @@ def test_download_writes_three_files_without_parts(tmp_path: Path, monkeypatch: 
     assert [word["text"] for word in described["words"]] == ["Pierwsza", "kwestia.", "Druga", "kwestia."]
     assert site.uploaded == []
     assert site.deleted == []
+
+
+@pytest.mark.parametrize("name", ["ksiazka", "ksiazka.txt", "ksiazka.mp3.json"])
+def test_download_output_without_mp3_suffix_raises_input_error(tmp_path: Path, name: str) -> None:
+    with pytest.raises(TtsInputError):
+        reading.download(f"https://elevenreader.io/reader/library/{READ_ID}", out=tmp_path / name, home=tmp_path)
+
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.usefixtures("fast_engine")
+def test_download_resumed_document_is_refused_without_retry_or_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sleeps: list[float]
+) -> None:
+    site = FakeSite(texts=("Pierwsza kwestia.",), player_done=True, start_position=57)
+    monkeypatch.setattr(service, "headless_session", _fake_browser(site))
+    out = tmp_path / "wyniki" / "ksiazka.mp3"
+
+    with pytest.raises(TtsInputError) as error:
+        reading.download(f"https://elevenreader.io/reader/library/{READ_ID}", out=out, home=tmp_path)
+
+    assert error.value.context.details == {"position": 57.0}
+    assert site.plays == 1
+    assert [seconds for seconds in sleeps if seconds >= reading.RETRY_BASE_S] == []
+    assert list((tmp_path / "wyniki").iterdir()) == []

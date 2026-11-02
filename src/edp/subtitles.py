@@ -1,4 +1,4 @@
-"""Words and sentences from streamed character timings, written as ``<name>.json`` and ``<name>.srt``."""
+"""Words and sentences from streamed character timings, as the text of ``<name>.json`` and ``<name>.srt``."""
 
 from __future__ import annotations
 
@@ -10,21 +10,18 @@ from typing import TYPE_CHECKING, Final
 from edp.engine.service import part_bounds, stream_timeline
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from edp.engine.types import AlignmentChunk, PartTiming
 
 __all__ = [
     "Piece",
     "Sentence",
     "Word",
+    "json_text",
     "shifted",
     "split_sentences",
     "split_words",
     "spoken_pieces",
     "srt_text",
-    "write_json",
-    "write_srt",
 ]
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -143,13 +140,7 @@ def srt_text(pieces: list[Piece]) -> str:
     return "\n".join(blocks)
 
 
-def write_srt(path: Path, pieces: list[Piece]) -> None:
-    """Write the SRT subtitles of *pieces* to *path* with LF line ends."""
-    path.write_text(srt_text(pieces), encoding="utf-8", newline="\n")
-
-
-def write_json(  # noqa: PLR0913 - the file schema has these independent fields
-    path: Path,
+def json_text(  # noqa: PLR0913 - the file schema has these independent fields
     *,
     audio: str,
     voice: str | None,
@@ -157,11 +148,10 @@ def write_json(  # noqa: PLR0913 - the file schema has these independent fields
     lines: tuple[str, ...],
     timings: tuple[PartTiming, ...],
     pieces: list[Piece],
-) -> None:
-    """Write the recording description shared with the userscript: parts, words and the indexes of silent parts.
+) -> str:
+    """Return the recording description shared with the userscript: parts, words and the indexes of silent parts.
 
     Args:
-        path: File to write.
         audio: File name of the MP3 next to it.
         voice: Voice alias, or None when the account voice read the document.
         duration_ms: Length of the MP3 on the server timeline.
@@ -191,7 +181,7 @@ def write_json(  # noqa: PLR0913 - the file schema has these independent fields
         ],
         "silent": [index for index, timing in enumerate(timings) if not timing.spoken],
     }
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+    return json.dumps(data, ensure_ascii=False, indent=2) + "\n"
 
 
 def _ends_sentence(word: Word) -> bool:

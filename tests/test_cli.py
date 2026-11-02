@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import json
 from typing import TYPE_CHECKING
 
@@ -10,6 +11,7 @@ from edp import cli, reading
 from edp.cli import EXIT_CANCELLED, EXIT_INCOMPLETE, EXIT_REFUSED, EXIT_SUCCESS, EXIT_USAGE, main
 from edp.engine.api_backend import save_cleanup, write_session
 from edp.engine.types import AccountCleanup, AccountSettings
+from edp.reading import RecordResult
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -152,6 +154,98 @@ def test_download_other_address_exits_with_usage_error(capsys: pytest.CaptureFix
     assert code == EXIT_USAGE
     assert isinstance(value, dict)
     assert value["error"]["code"] == "TTS_INPUT_INVALID"
+
+
+def test_download_output_without_mp3_suffix_exits_with_usage_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    url = "https://elevenreader.io/reader/library/u:readsecret42"
+
+    value, code = _run(capsys, "download", url, "--out", str(tmp_path / "book.txt"), "--home", str(tmp_path))
+
+    assert code == EXIT_USAGE
+    assert isinstance(value, dict)
+    assert value["error"]["code"] == "TTS_INPUT_INVALID"
+
+
+def test_record_unwritable_output_folder_exits_refused_before_recording(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = ScriptedEngine(tmp_path)
+    monkeypatch.setattr(reading, "ElevenReaderTtsEngine", lambda config: engine)
+    blocker = tmp_path / "plik"
+    blocker.write_text("", encoding="utf-8")
+    text = _text(tmp_path, "jeden", "Raz.")
+
+    value, code = _run(capsys, "record", str(text), "--out", str(blocker / "o"), "--home", str(tmp_path))
+
+    assert code == EXIT_REFUSED
+    assert isinstance(value, dict)
+    assert value["results"] == []
+    assert value["error"]["code"] == "IO_ERROR"
+    assert engine.calls == 0
+
+
+def test_unexpected_os_error_exits_refused_with_json(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(*args: object, **kwargs: object) -> None:
+        raise PermissionError(errno.EACCES, "Permission denied", str(tmp_path / "x"))
+
+    monkeypatch.setattr(cli, "download", broken)
+
+    value, code = _run(capsys, "download", "https://elevenreader.io/reader/library/u:x", "--out", "x.mp3")
+
+    assert code == EXIT_REFUSED
+    assert value == {
+        "error": {
+            "code": "IO_ERROR",
+            "message": "Permission denied",
+            "suggestion": "Check the paths, their permissions and free disk space.",
+            "details": {"path": str(tmp_path / "x")},
+        }
+    }
+
+
+def test_unexpected_exception_exits_refused_with_json_and_logged_traceback(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(*args: object, **kwargs: object) -> None:
+        message = "bug"
+        raise RuntimeError(message)
+
+    monkeypatch.setattr(cli, "download", broken)
+
+    code = main(["download", "https://elevenreader.io/reader/library/u:x", "--out", "x.mp3"])
+
+    captured = capsys.readouterr()
+    assert code == EXIT_REFUSED
+    assert json.loads(captured.out)["error"]["code"] == "INTERNAL"
+    assert "Traceback" in captured.err
+    assert "RuntimeError: bug" in captured.err
+
+
+def test_ctrl_c_during_second_text_keeps_results_of_the_first(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(reading, "ElevenReaderTtsEngine", lambda config: ScriptedEngine(tmp_path))
+    texts = iter([None, KeyboardInterrupt()])
+
+    def interrupt_second(*args: object, **kwargs: object) -> RecordResult:
+        stop = next(texts)
+        if stop is not None:
+            raise stop
+        return reading.record(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(cli, "record", interrupt_second)
+    first, second = _text(tmp_path, "jeden", "Raz."), _text(tmp_path, "dwa", "Dwa.")
+
+    value, code = _run(capsys, "record", str(first), str(second), "--home", str(tmp_path))
+
+    assert code == EXIT_CANCELLED
+    assert isinstance(value, dict)
+    assert [result["text"] for result in value["results"]] == [str(first)]
+    assert value["error"]["code"] == "CANCELLED"
 
 
 def test_ctrl_c_exits_cancelled_with_json(

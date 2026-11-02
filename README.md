@@ -7,7 +7,8 @@ subtitles (`.srt`). Two ways to use it:
   Also records a document that is already in your library.
 - **Userscript** (Tampermonkey): does the same inside the browser tab.
 
-Both start recording when the audio stream opens, so the beginning of a document is never cut off.
+Both record from the moment the audio stream opens. `edp download` refuses a document that the page resumes from the
+middle (rewind it to the beginning in ElevenReader first), and the userscript warns about it in its panel.
 
 ## `edp` command
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import itertools
 import os
+import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,9 +33,9 @@ from edp.engine import (
     resolve_voice,
 )
 from edp.engine.api_backend import sign_in as sign_in_async
-from edp.engine.service import stream_timeline
-from edp.errors import ErrorCode, ErrorContext, TransientError, TtsInputError
-from edp.subtitles import Piece, shifted, spoken_pieces, write_json, write_srt
+from edp.engine.service import PART_GLUE, stream_timeline
+from edp.errors import ErrorCode, ErrorContext, OutputError, TransientError, TtsInputError
+from edp.subtitles import Piece, json_text, shifted, spoken_pieces, srt_text
 from edp.utils._retry import build_retry
 from edp.utils.logger import get_logger
 from edp.utils.mp3_frames import cut_before_ms, frames_duration_ms
@@ -75,6 +76,18 @@ RETRY_CAP_S: Final[float] = 300.0
 
 _READER_HOST: Final[str] = "elevenreader.io"
 """Host of document addresses."""
+
+_MP3: Final[str] = ".mp3"
+"""Suffix of the recording; the JSON and SRT files take the same name with their own suffix."""
+
+_JSON: Final[str] = ".json"
+"""Suffix of the recording description."""
+
+_SRT: Final[str] = ".srt"
+"""Suffix of the subtitles."""
+
+_NEWLINE: Final[str] = "\n"
+"""Line end closing every uploaded document."""
 
 _READER_PATH: Final[str] = "reader"
 """First path segment of document addresses; the read id is the last one."""
@@ -146,6 +159,8 @@ def record(
 def download(url: str, *, out: Path, voice: str | None = None, home: Path | None = None) -> RecordResult:
     """Record an existing library document from its start into *out* and the ``.json`` and ``.srt`` next to it."""
     read_id: str = read_id_from_url(url)
+    if out.suffix.casefold() != _MP3:
+        _raise_input("The output file must end with .mp3", "Pass --out with a file name ending in .mp3.")
     return asyncio.run(_download(read_id, out, voice=voice, home=home or default_home()))
 
 
@@ -154,49 +169,67 @@ def sign_in(home: Path | None = None) -> SignInOutcome:
     return asyncio.run(sign_in_async(home or default_home()))
 
 
-async def _record(source: str, stem: Path, *, voice: str, tags: bool, home: Path) -> RecordResult:
+async def _record(source: str, base: Path, *, voice: str, tags: bool, home: Path) -> RecordResult:
     chosen: ElevenReaderVoice = resolve_voice(voice)
     engine: ElevenReaderTtsEngine = ElevenReaderTtsEngine(ElevenReaderConfig(voice=chosen, profile_root=home))
+    work: Path | None = None
+    kept: bool = False
     try:
         parts: tuple[DocumentPart, ...] = _parts(source, engine)
-        with tempfile.TemporaryDirectory(prefix="edp-") as folder:
-            reader: _Reader = _Reader(engine, chosen.voice_id, tags=tags, folder=Path(folder))
-            takes: list[DocumentResult] = await reader.read(_documents(parts, engine))
-            return _write_record(stem, chosen.alias, parts, takes)
+        work = _workspace(base)
+        reader: _Reader = _Reader(engine, chosen.voice_id, tags=tags, folder=work)
+        takes: list[DocumentResult] = await reader.read(_documents(parts, engine))
+        try:
+            return _write_record(base, chosen.alias, parts, takes)
+        except OSError as error:
+            kept = True
+            raise _output_error(error, kept=work) from error
     finally:
         await engine.close()
+        if work is not None and not kept:
+            shutil.rmtree(work, ignore_errors=True)
 
 
 async def _download(read_id: str, out: Path, *, voice: str | None, home: Path) -> RecordResult:
     chosen: ElevenReaderVoice | None = None if voice is None else resolve_voice(voice)
     config: ElevenReaderConfig = ElevenReaderConfig(voice=chosen or VOICES[DEFAULT_VOICE_ALIAS], profile_root=home)
+    base: Path = out.with_name(out.name[: -len(_MP3)])
+    work: Path = _workspace(base)
     engine: ElevenReaderTtsEngine = ElevenReaderTtsEngine(config)
-    cancel: Cancellation = Cancellation()
+    kept: bool = False
     try:
-        with tempfile.TemporaryDirectory(prefix="edp-") as folder:
-            recording: Path = Path(folder) / "download.mp3"
-            result: DocumentResult = await _retrying()(
-                engine.download_document,
-                read_id,
-                recording,
-                voice_id=None if chosen is None else chosen.voice_id,
-                deadline_s=DOWNLOAD_DEADLINE_S,
-                cancel=cancel,
-            )
-            data: bytes = recording.read_bytes()
+        result: DocumentResult = await _retrying()(
+            engine.download_document,
+            read_id,
+            work / f"download{_MP3}",
+            voice_id=None if chosen is None else chosen.voice_id,
+            deadline_s=DOWNLOAD_DEADLINE_S,
+            cancel=Cancellation(),
+        )
+        try:
+            return _write_download(out, base, None if chosen is None else chosen.alias, result)
+        except OSError as error:
+            kept = True
+            raise _output_error(error, kept=work) from error
     finally:
         await engine.close()
-    _write_atomic(out, data)
-    paths: tuple[Path, Path] = out.with_suffix(".json"), out.with_suffix(".srt")
+        if not kept:
+            shutil.rmtree(work, ignore_errors=True)
+
+
+def _write_download(out: Path, base: Path, voice_alias: str | None, result: DocumentResult) -> RecordResult:
+    data: bytes = result.recording.read_bytes()
+    described, subtitles = _sibling(base, _JSON), _sibling(base, _SRT)
     pieces: list[Piece] = [stream_timeline(result.chunks)]
     duration_ms: float = frames_duration_ms(data)
-    voice_alias: str | None = None if chosen is None else chosen.alias
-    write_json(
-        paths[0], audio=out.name, voice=voice_alias, duration_ms=duration_ms, lines=(), timings=(), pieces=pieces
+    _write_atomic(out, data)
+    _write_atomic(
+        described,
+        json_text(audio=out.name, voice=voice_alias, duration_ms=duration_ms, lines=(), timings=(), pieces=pieces),
     )
-    write_srt(paths[1], pieces)
+    _write_atomic(subtitles, srt_text(pieces))
     logger.info("Document downloaded", duration_ms=duration_ms)
-    return RecordResult(mp3=out, json=paths[0], srt=paths[1], duration_ms=duration_ms, parts=(), silent=())
+    return RecordResult(mp3=out, json=described, srt=subtitles, duration_ms=duration_ms, parts=(), silent=())
 
 
 class _Reader:
@@ -298,20 +331,29 @@ def _parts(source: str, engine: ElevenReaderTtsEngine) -> tuple[DocumentPart, ..
 
 
 def _documents(parts: tuple[DocumentPart, ...], engine: ElevenReaderTtsEngine) -> list[tuple[DocumentPart, ...]]:
+    """Group *parts* in order into documents of at most ``MAX_DOCUMENT_CHARS`` characters.
+
+    A document is as long as its parts read alone, with the closing newline counted once, plus ``PART_GLUE``
+    between them, so the length grows by a running sum instead of measuring the whole document again.
+    """
     documents: list[tuple[DocumentPart, ...]] = []
     current: list[DocumentPart] = []
+    chars: int = 0
     for part in parts:
-        if current and engine.document_chars((*current, part)) > MAX_DOCUMENT_CHARS:
+        alone: int = engine.document_chars((part,))
+        grown: int = chars - len(_NEWLINE) + len(PART_GLUE) + alone if current else alone
+        if current and grown > MAX_DOCUMENT_CHARS:
             documents.append(tuple(current))
-            current = []
+            current, grown = [], alone
         current.append(part)
+        chars = grown
     documents.append(tuple(current))
     logger.info("Text split into documents", parts=len(parts), documents=len(documents))
     return documents
 
 
 def _write_record(
-    stem: Path, voice_alias: str, parts: tuple[DocumentPart, ...], results: list[DocumentResult]
+    base: Path, voice_alias: str, parts: tuple[DocumentPart, ...], results: list[DocumentResult]
 ) -> RecordResult:
     """Join, in part order, the stretch of the recording that spoke each part; an unspoken part gets an empty span."""
     takes: list[_Take] = [_take_of(result) for result in results]
@@ -339,15 +381,18 @@ def _write_record(
         output += segment
         output_ms += length_ms
     data: bytes = bytes(output)
-    mp3, described, subtitles = stem.with_suffix(".mp3"), stem.with_suffix(".json"), stem.with_suffix(".srt")
-    _write_atomic(mp3, data)
+    mp3, described, subtitles = _sibling(base, _MP3), _sibling(base, _JSON), _sibling(base, _SRT)
     duration_ms: float = frames_duration_ms(data)
     final: tuple[PartTiming, ...] = tuple(timings)
     lines: tuple[str, ...] = tuple(part.text for part in parts)
-    write_json(
-        described, audio=mp3.name, voice=voice_alias, duration_ms=duration_ms, lines=lines, timings=final, pieces=pieces
+    _write_atomic(mp3, data)
+    _write_atomic(
+        described,
+        json_text(
+            audio=mp3.name, voice=voice_alias, duration_ms=duration_ms, lines=lines, timings=final, pieces=pieces
+        ),
     )
-    write_srt(subtitles, pieces)
+    _write_atomic(subtitles, srt_text(pieces))
     silent: tuple[int, ...] = tuple(index for index, timing in enumerate(final) if not timing.spoken)
     logger.info("Text recorded", parts=len(final), silent=len(silent), recordings=len(takes), duration_ms=duration_ms)
     return RecordResult(mp3=mp3, json=described, srt=subtitles, duration_ms=duration_ms, parts=final, silent=silent)
@@ -379,14 +424,41 @@ def _stretch(take: _Take, request_id: str) -> tuple[bytes, float, float]:
     return rest[: len(rest) - len(tail)], cut_ms, length_ms
 
 
-def _write_atomic(path: Path, data: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+def _sibling(base: Path, suffix: str) -> Path:
+    """Return *base* with *suffix* appended, keeping every dot already in its name."""
+    return base.with_name(base.name + suffix)
+
+
+def _workspace(base: Path) -> Path:
+    """Create the output folder and, inside it, a working folder for the recordings, before anything is recorded."""
+    try:
+        base.parent.mkdir(parents=True, exist_ok=True)
+        return Path(tempfile.mkdtemp(prefix=f".{base.name}-", dir=base.parent))
+    except OSError as error:
+        raise _output_error(error, kept=None) from error
+
+
+def _write_atomic(path: Path, data: bytes | str) -> None:
     temporary: Path = path.with_name(f".{path.name}.tmp")
     try:
-        temporary.write_bytes(data)
+        temporary.write_bytes(data.encode("utf-8") if isinstance(data, str) else data)
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _output_error(error: OSError, *, kept: Path | None) -> OutputError:
+    details: dict[str, object] = {"error": error.strerror or type(error).__name__}
+    if error.filename is not None:
+        details["path"] = str(error.filename)
+    suggestion: str = "Free disk space or choose another output folder."
+    if kept is not None:
+        details["recordings"] = str(kept)
+        suggestion = "Free disk space or choose another output folder; the recordings stay in details.recordings."
+    context: ErrorContext = ErrorContext(
+        code=ErrorCode.IO_ERROR, message="The result files cannot be written", suggestion=suggestion, details=details
+    )
+    return OutputError(context=context)
 
 
 def _raise_input(message: str, suggestion: str) -> Never:

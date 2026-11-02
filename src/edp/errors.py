@@ -11,6 +11,7 @@ __all__ = [
     "ErrorCode",
     "ErrorContext",
     "FatalError",
+    "OutputError",
     "TransientError",
     "TtsAuthError",
     "TtsCancelledError",
@@ -85,6 +86,10 @@ class TransientError(EdpError):
 
 class FatalError(EdpError):
     """Base class for non-retryable errors (config, missing binary, bad input)."""
+
+
+class OutputError(FatalError):
+    """Result files or the folder for them cannot be written; the details name recordings kept for a retry."""
 
 
 class TtsError(EdpError):

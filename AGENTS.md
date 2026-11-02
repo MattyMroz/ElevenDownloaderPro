@@ -54,6 +54,10 @@ node --test userscript/
   nadpisują sobie głos i limit 2 strumieni na urządzenie.
 - Ten sam tekst z tym samym głosem serwer oddaje z cache jako identyczne MP3; nowe ujęcie wymaga zmienionego tekstu.
 - Twarde zabicie `edp` zostawia Chrome na profilu; Ctrl+C idzie przez anulowanie i łagodne zamknięcie (kod 4).
+- `edp download` odmawia (kod 2) dokumentu, który strona wznawia od środka (`position` > 0 w pierwszej wysłanej
+  ramce); przewinięcia na początek przed Play nie znamy.
+- Nagrania powstają w ukrytym katalogu roboczym obok plików wynikowych. Gdy zapis wyników się nie uda, katalog
+  zostaje, a jego ścieżka jest w `error.details.recordings`.
 
 ## Dane runtime
 

@@ -24,16 +24,18 @@ if TYPE_CHECKING:
 
 __all__ = ["EXIT_CANCELLED", "EXIT_INCOMPLETE", "EXIT_REFUSED", "EXIT_SUCCESS", "EXIT_USAGE", "main"]
 
+logger = get_logger(__name__)
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 EXIT_SUCCESS: Final[int] = 0
 """The command did everything it was asked to."""
 
 EXIT_REFUSED: Final[int] = 1
-"""Refused: configuration, sign-in, voice, credits or missing Chrome."""
+"""Refused: configuration, sign-in, voice, credits, missing Chrome, unwritable output or an unexpected error."""
 
 EXIT_USAGE: Final[int] = 2
-"""Unusable arguments or input: unknown option, unreadable text, a line too long, not a document address."""
+"""Unusable arguments or input: bad option, unreadable text, long line, bad address or output, resumed document."""
 
 EXIT_INCOMPLETE: Final[int] = 3
 """Finished without everything: a part stayed silent after every reread, or a transient failure outlived retries."""
@@ -53,8 +55,10 @@ Every command prints one JSON value on stdout and logs on stderr; a failure prin
 
 exit codes:
   0  success
-  1  refused: configuration, sign-in, voice, credits or missing Chrome
-  2  usage: bad arguments, unreadable text, a line too long, not a document address
+  1  refused: configuration, sign-in, voice, credits, missing Chrome, unwritable output
+     or an unexpected error (traceback on stderr)
+  2  usage: bad arguments, unreadable text, a line too long, not a document address,
+     --out without .mp3, a library document that resumes from the middle
   3  incomplete: a part stayed silent after rereads, or a transient failure outlived retries
   4  cancelled with Ctrl+C
 """
@@ -90,10 +94,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     command: _Command = arguments.command
     try:
         value, code = command(arguments)
-    except KeyboardInterrupt:
-        value, code = _failure("CANCELLED", "Cancelled with Ctrl+C", ""), EXIT_CANCELLED
-    except EdpError as error:
-        value, code = _error_value(error), _exit_code(error)
+    except (KeyboardInterrupt, Exception) as error:  # noqa: BLE001 - the process boundary reports every failure as JSON
+        value, code = _outcome(error)
     finally:
         root.remove(sink)
     _print(value)
@@ -160,8 +162,9 @@ def _record(arguments: argparse.Namespace) -> tuple[object, int]:
             result: RecordResult = record(
                 text, voice=arguments.voice, out_dir=arguments.out, tags=arguments.tags, home=arguments.home
             )
-        except EdpError as error:
-            return {"results": results, **_error_value(error)}, _exit_code(error)
+        except (KeyboardInterrupt, EdpError, OSError) as error:
+            failure, code = _outcome(error)
+            return {"results": results, **failure}, code
         results.append({"text": str(text), **_result_value(result)})
     silent: bool = any(entry["silent"] for entry in results)
     return {"results": results}, EXIT_INCOMPLETE if silent else EXIT_SUCCESS
@@ -181,6 +184,23 @@ def _result_value(result: RecordResult) -> dict[str, object]:
         "duration_ms": result.duration_ms,
         "silent": list(result.silent),
     }
+
+
+def _outcome(error: BaseException) -> tuple[dict[str, object], int]:
+    if isinstance(error, KeyboardInterrupt):
+        return _failure("CANCELLED", "Cancelled with Ctrl+C", ""), EXIT_CANCELLED
+    if isinstance(error, EdpError):
+        return _error_value(error), _exit_code(error)
+    if isinstance(error, OSError):
+        details: dict[str, object] = {} if error.filename is None else {"path": str(error.filename)}
+        message: str = error.strerror or type(error).__name__
+        return _failure(
+            "IO_ERROR", message, "Check the paths, their permissions and free disk space.", details
+        ), EXIT_REFUSED
+    logger.opt(exception=error).error("edp failed unexpectedly")
+    return _failure(
+        "INTERNAL", f"Unexpected {type(error).__name__}", "Report the traceback logged above.", {}
+    ), EXIT_REFUSED
 
 
 def _error_value(error: EdpError) -> dict[str, object]:
@@ -207,7 +227,7 @@ def _exit_code(error: EdpError) -> int:
 def _log_line(record: Record) -> str:
     details: str = " ".join(f"{key}={value}" for key, value in record["extra"].items() if key != "logger_name")
     escaped: str = details.replace("{", "{{").replace("}", "}}")
-    return f"{_LOG_FORMAT} {escaped}\n" if escaped else f"{_LOG_FORMAT}\n"
+    return f"{_LOG_FORMAT} {escaped}\n{{exception}}" if escaped else f"{_LOG_FORMAT}\n{{exception}}"
 
 
 def _print(value: object) -> None:

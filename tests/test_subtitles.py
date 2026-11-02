@@ -12,7 +12,7 @@ from edp.engine.recorder import StreamRecorder
 from edp.engine.service import part_spans, stream_timeline
 from edp.engine.types import AlignmentChunk, DocumentPart
 from edp.reading import text_lines
-from edp.subtitles import Piece, split_sentences, split_words, spoken_pieces, write_json, write_srt
+from edp.subtitles import Piece, json_text, split_sentences, split_words, spoken_pieces, srt_text
 from edp.utils.mp3_frames import frames_duration_ms
 
 pytestmark = pytest.mark.unit
@@ -31,11 +31,8 @@ def _stream(name: str) -> tuple[tuple[AlignmentChunk, ...], float]:
     return recorder.chunks, duration_ms
 
 
-def _write(tmp_path: Path, name: str, pieces: list[Piece], **fields: Any) -> tuple[str, object]:
-    srt, described = tmp_path / f"{name}.srt", tmp_path / f"{name}.json"
-    write_srt(srt, pieces)
-    write_json(described, audio=f"{name}.mp3", pieces=pieces, **fields)
-    return srt.read_bytes().decode("utf-8"), json.loads(described.read_text(encoding="utf-8"))
+def _texts(name: str, pieces: list[Piece], **fields: Any) -> tuple[str, object]:
+    return srt_text(pieces), json.loads(json_text(audio=f"{name}.mp3", pieces=pieces, **fields))
 
 
 def _expected(name: str) -> tuple[str, object]:
@@ -45,24 +42,23 @@ def _expected(name: str) -> tuple[str, object]:
     )
 
 
-def test_subtitles_open_document_without_parts_match_fixture(tmp_path: Path) -> None:
+def test_subtitles_open_document_without_parts_match_fixture() -> None:
     chunks, duration_ms = _stream("open-document")
 
-    written = _write(
-        tmp_path, "open-document", [stream_timeline(chunks)], voice=None, lines=(), timings=(), duration_ms=duration_ms
+    written = _texts(
+        "open-document", [stream_timeline(chunks)], voice=None, lines=(), timings=(), duration_ms=duration_ms
     )
 
     assert written == _expected("open-document")
 
 
-def test_subtitles_pasted_text_with_silent_part_match_fixture(tmp_path: Path) -> None:
+def test_subtitles_pasted_text_with_silent_part_match_fixture() -> None:
     chunks, duration_ms = _stream("pasted-text")
     lines = text_lines((FIXTURES / "pasted-text.txt").read_text(encoding="utf-8"))
     parts = tuple(DocumentPart(request_id=str(index), text=line) for index, line in enumerate(lines))
     timings = part_spans(chunks, parts)
 
-    written = _write(
-        tmp_path,
+    written = _texts(
         "pasted-text",
         list(spoken_pieces(chunks, timings).values()),
         voice="fronczewski",
@@ -74,13 +70,12 @@ def test_subtitles_pasted_text_with_silent_part_match_fixture(tmp_path: Path) ->
     assert written == _expected("pasted-text")
 
 
-def test_subtitles_srt_bytes_match_fixture_exactly(tmp_path: Path) -> None:
+def test_subtitles_srt_bytes_match_fixture_exactly() -> None:
     chunks, _ = _stream("open-document")
-    path = tmp_path / "open-document.srt"
 
-    write_srt(path, [stream_timeline(chunks)])
+    written = srt_text([stream_timeline(chunks)]).encode("utf-8")
 
-    assert path.read_bytes() == (FIXTURES / "open-document.srt").read_bytes()
+    assert written == (FIXTURES / "open-document.srt").read_bytes()
 
 
 def test_split_words_break_tag_is_no_word_and_ends_sentence() -> None:
