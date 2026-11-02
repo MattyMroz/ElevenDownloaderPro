@@ -21,7 +21,7 @@ minimum_pre_commit_version: "4.0.0"
 default_install_hook_types: [pre-commit, commit-msg, pre-push]
 default_stages: [pre-commit]
 
-# downloader.py uses Python 3.14 syntax; older hook interpreters cannot parse it.
+# The code uses Python 3.14 syntax; older hook interpreters cannot parse it.
 default_language_version:
   python: python3.14
 
@@ -67,7 +67,7 @@ repos:
         stages: [commit-msg]
         args:
           - --force-scope
-          - --scopes=repo,docs,downloader,userscript,deps,utils,engine
+          - --scopes=repo,docs,userscript,deps,utils,engine
           - feat
           - fix
           - chore
