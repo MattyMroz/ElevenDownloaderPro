@@ -1,0 +1,56 @@
+name: Feature
+description: New feature or improvement
+title: "feat(scope): "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should be built and why? What value does it bring?
+      placeholder: "edp record writes chapter markers into the MP3."
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope / how to do it
+      description: Roughly what needs to change. No over-planning.
+      placeholder: "subtitles.py gets the chapter starts; the same rule goes into userscript/edp.user.js."
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area (you can add more via labels after creating)
+      options:
+        - engine
+        - cli
+        - utils
+        - userscript
+        - deps
+        - docs
+        - ci
+        - repo
+    validations:
+      required: true
+  - type: dropdown
+    id: size
+    attributes:
+      label: Size
+      options:
+        - small (up to 1 day)
+        - medium (a few days)
+        - large (epic, split it)
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition of done
+      value: |
+        - [ ] works in edp and in the userscript, or only one route is in scope
+        - [ ] tests green
+        - [ ] validated before commit
+    validations:
+      required: false
