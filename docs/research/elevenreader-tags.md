@@ -1,6 +1,6 @@
 # Znaczniki w tekście ElevenReadera: co działa
 
-Test z 18 października 2026 r. ElevenReader w przeglądarce, polski tekst, prędkość czytania 1x (model Eleven v4).
+Które znaczniki w tekście (SSML, nawiasy kwadratowe, interpunkcja) zmieniają nagranie ElevenReadera: test z 18 października 2026 r., ElevenReader w przeglądarce, polski tekst, prędkość czytania 1x (model Eleven v4).
 
 ## Wynik w skrócie
 
@@ -11,7 +11,7 @@ Test z 18 października 2026 r. ElevenReader w przeglądarce, polski tekst, prę
 
 ## Wyniki
 
-Kolumna „Argon” i „Flash” pokazuje, czy dany sędzia wskazał nagranie ze znacznikiem w obu ocenach (zamiana kolejności A/B): „tak”, „nie”, „1/2” (tylko w jednej) albo „–” (brak oceny). Przy głośności, wysokości głosu i pauzach rozstrzyga pomiar, bo sędziowie tych cech nie słyszą (patrz „Sprawdzian sędziów”).
+W kolumnie „Dowód” wpis „Argon” i „Flash” pokazuje, czy dany sędzia wskazał nagranie ze znacznikiem w obu ocenach (zamiana kolejności A/B): „tak”, „nie”, „1/2” (tylko w jednej) albo „–” (brak oceny). Przy głośności, wysokości głosu i pauzach rozstrzyga pomiar, bo sędziowie tych cech nie słyszą (patrz „Sprawdzian sędziów”).
 
 ### Działa
 
@@ -105,3 +105,7 @@ Każda para leży w `workspace/output/tag-test-clips/` jako `<znacznik>_z.mp3` (
 - Ustawienie ekspresyjności konta to `expressive`, najbardziej ekspresywne (pole `voice_expressiveness` w `user_config`, odczytane 17–18 października). W dniu testu nie odczytałem go ponownie.
 - Emocji, akcentu i jakości efektów nie da się zmierzyć liczbami; tam rozstrzyga ucho, a sędziowie się różnią.
 - Koszt testu: 17 038 znaków, około 1,7 kredytu.
+
+## Stan w edp
+
+Silnik `edp` domyślnie neutralizuje znaczniki v4: zamienia `[` na `(`, więc nawiasy kwadratowe nie działają jako znaczniki. Flaga `--tags` (`edp record PLIK.txt --voice ALIAS --tags`) przepuszcza je do serwera bez zmian. `<break` w części tekstu jest odrzucany zawsze, bo psuje granice części.

@@ -387,7 +387,7 @@ bez commita).
 3. `.pre-commit-config.yaml`: scope'y `repo,docs,deps,engine,utils,cli,userscript,ci`; komentarz
    `default_language_version` bez `downloader.py`; `ruff-pre-commit` wyrównany do wersji z `uv.lock`.
 4. `LICENSE` (MIT, © 2026 Mateusz Mróz); `.github/` ze wzorca AniShift: szablony issue i PR, `ci.yml` z jobami lint,
-   typecheck, test (`-m "not network" -n 4`, ubuntu i windows), userscript (`node --test`).
+   typecheck, test (`-m "not network" -n logical`, ubuntu i windows; lokalnie zostaje jawne `-n 6`), userscript (`node --test`).
 5. README: tylko poprawki zdań, które po refaktorze są fałszywe (ścieżki, komendy).
 
 **Kontrola:** `prek run --all-files`, `prek run --hook-stage manual --all-files`,
