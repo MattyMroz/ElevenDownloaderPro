@@ -67,7 +67,7 @@ repos:
         stages: [commit-msg]
         args:
           - --force-scope
-          - --scopes=repo,docs,userscript,deps,utils,engine
+          - --scopes=repo,docs,userscript,deps,utils,engine,cli
           - feat
           - fix
           - chore

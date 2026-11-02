@@ -89,7 +89,7 @@ wheels = [
 ]
 
 [[package]]
-name = "eleven-downloader-pro"
+name = "edp"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
