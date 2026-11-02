@@ -15,7 +15,6 @@ Replace every <result> with what you saw, e.g. "12/12 passed", "failed",
 ## Validation
 
 Validation:
-
 - uv run ruff check .: <result>
 - uv run ruff format --check .: <result>
 - uv run mypy .: <result>

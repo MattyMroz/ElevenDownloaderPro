@@ -586,7 +586,7 @@ describe("words and subtitles of known parts", () => {
         assert.deepEqual(json.silent, [1, 2]);
     });
 
-    test("open document without parts keeps the separator like src/timestamps.py", () => {
+    test("open document without parts keeps the separator like src/edp/subtitles.py", () => {
         const { json } = files([chunk('Ab. <break time="0.6s"/> … <break time="0.6s"/> Cd.')], null);
 
         assert.deepEqual(

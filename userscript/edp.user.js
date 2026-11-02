@@ -492,7 +492,7 @@
         return partRanges(chunks, parts, tags).map((range) => ({ start_ms: range.start_ms, end_ms: range.end_ms }));
     }
 
-    // ── Subtitles (port of src/timestamps.py) ────────────────────────────────────
+    // ── Subtitles (same rules as src/edp/subtitles.py) ───────────────────────────
 
     function splitWords(text, starts, ends) {
         const codePoints = Array.from(text);

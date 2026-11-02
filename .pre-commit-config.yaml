@@ -118,6 +118,8 @@ repos:
     hooks:
       - id: mdformat
         args: [--number]
+        # mdformat puts a blank line under "Validation:", which commit-validation rejects in a PR body.
+        exclude: ^\.github/pull_request_template\.md$
         # Without these plugins it wrecks GFM tables.
         additional_dependencies:
           - mdformat-gfm==0.4.1
