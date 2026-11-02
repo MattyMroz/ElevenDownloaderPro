@@ -67,7 +67,7 @@ repos:
         stages: [commit-msg]
         args:
           - --force-scope
-          - --scopes=repo,docs,userscript,deps,utils,engine,cli
+          - --scopes=repo,docs,userscript,deps,utils,engine,cli,ci
           - feat
           - fix
           - chore
@@ -135,7 +135,7 @@ repos:
       - id: debug-statements
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.2
+    rev: v0.17.1
     hooks:
       - id: ruff-check
         args: [--fix]
