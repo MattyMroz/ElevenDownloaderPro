@@ -3,6 +3,7 @@ name = "eleven-downloader-pro"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
+    "miniaudio>=1.71",
     "playwright>=1.64.0",
 ]
 
