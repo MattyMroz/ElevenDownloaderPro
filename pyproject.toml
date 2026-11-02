@@ -3,18 +3,126 @@ name = "eleven-downloader-pro"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
-    "miniaudio>=1.71",
+    "loguru>=0.7",
     "playwright>=1.64.0",
+    "pydantic>=2.0",
+    "rich>=13.0",
+    "tenacity>=9.0",
 ]
+
+[build-system]
+requires = ["uv_build>=0.13.1,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "edp"
 
 [dependency-groups]
 dev = [
     "mypy>=2.4.0",
+    "pytest>=9.2.0",
+    "pytest-xdist>=3.8.0",
     "ruff>=0.17.1",
 ]
 
 [tool.ruff]
+target-version = "py314"
 line-length = 120
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "workspace",
+    "build",
+    "dist",
+    ".claude",
+    ".github",
+    ".worktrees",
+    "scripts/tmp",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "F",     # pyflakes
+    "W",     # pycodestyle warnings
+    "I",     # isort
+    "N",     # pep8-naming
+    "ANN",   # flake8-annotations (missing type hints)
+    "FA",    # flake8-future-annotations (require from __future__ import annotations)
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "S",     # flake8-bandit (security)
+    "BLE",   # flake8-blind-except
+    "G",     # flake8-logging-format
+    "T20",   # flake8-print
+    "C4",    # flake8-comprehensions
+    "SIM",   # flake8-simplify
+    "RET",   # flake8-return
+    "PTH",   # flake8-use-pathlib
+    "PT",    # flake8-pytest-style
+    "TRY",   # tryceratops (exception handling)
+    "PERF",  # perflint
+    "PL",    # pylint
+    "C90",   # mccabe — cyclomatic complexity limit
+    "LOG",   # flake8-logging
+    "D",     # pydocstyle
+    "RUF",   # ruff-specific
+]
+ignore = [
+    "D100",   # missing docstring in public module
+    "D104",   # missing docstring in public package
+    "D105",   # missing docstring in magic method
+    "D107",   # missing docstring in __init__
+    "ANN401", # allow explicit Any where external/JSON typing is unavoidable
+]
+allowed-confusables = ["ℹ", "×", "–"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D", "ANN", "S101", "PLR2004", "TRY003"]
+"src/edp/utils/**" = ["TID252", "D102", "D103", "D417", "ANN", "BLE001", "PLR", "C901", "PERF", "SIM", "ARG", "PLC0415", "RUF100"]
+"src/edp/utils/*/tests/**" = ["D", "ANN", "S101", "PLR2004", "TRY003", "T20", "S603", "BLE001", "E501", "PLR", "C901", "PT", "EM", "TC", "F841", "TRY301"]
+"src/edp/utils/*/examples/**" = ["D", "PLR2004", "PLC0415", "TRY301"]
 
 [tool.mypy]
+python_version = "3.14"
 strict = true
+plugins = ["pydantic.mypy"]
+warn_return_any = true
+warn_unused_configs = true
+exclude = [
+    "scripts/tmp/",
+    ".worktrees/",
+]
+
+[[tool.mypy.overrides]]
+module = ["httpx.*", "onnxruntime.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src/edp/utils"]
+pythonpath = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "unit: fast, isolated, no I/O or network (<100ms)",
+    "integration: requires a real component (subprocess, filesystem) (<5s)",
+    "network: requires internet or an online API",
+]
+addopts = [
+    "-q",
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]
+
+[tool.typos.default.extend-words]
+tak = "tak"
+tekst = "tekst"
