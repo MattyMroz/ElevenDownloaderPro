@@ -539,12 +539,72 @@ describe("subtitles", () => {
     });
 });
 
-describe("fixtures from src/timestamps.py", () => {
-    for (const name of ["open-document", "pasted-text"]) {
+describe("words and subtitles of known parts", () => {
+    function files(chunks, parts) {
+        return edp.resultFiles("x", { voice: null, durationMs: 0, chunks, parts, tags: false });
+    }
+
+    test("separator paragraph never becomes a word or a subtitle", () => {
+        const { json, srt } = files([chunk('Ab. <break time="0.6s"/> … <break time="0.6s"/> Cd. <break time="2s"/>')], ["Ab.", "Cd."]);
+
+        assert.deepEqual(
+            json.words.map((word) => word.text),
+            ["Ab.", "Cd."],
+        );
+        assert.ok(!srt.includes("…"));
+        assert.equal(srt.split(" --> ").length - 1, 2);
+    });
+
+    test("ellipsis ending a part stays in its word", () => {
+        const { json } = files([chunk('Zobacz filmik… <break time="0.6s"/> … <break time="0.6s"/> Cd.')], ["Zobacz filmik…", "Cd."]);
+
+        assert.deepEqual(
+            json.words.map((word) => word.text),
+            ["Zobacz", "filmik…", "Cd."],
+        );
+    });
+
+    test("sentence ends at the end of its part", () => {
+        const { srt } = files([chunk('Ab <break time="0.6s"/> … <break time="0.6s"/> cd')], ["Ab", "cd"]);
+
+        assert.equal(srt, "1\n00:00:00,000 --> 00:00:00,020\nAb\n\n2\n00:00:00,470 --> 00:00:00,490\ncd\n");
+    });
+
+    test("words of an unspoken part are left out", () => {
+        const chunks = [
+            chunk('Ab. <break time="0.6s"/> C'),
+            chunk('d. <break time="0.6s"/> Ef.', { offsetMs: 300.0, stepMs: 1.0, silent: true }),
+            chunk(' <break time="0.6s"/> Gh.', { offsetMs: 330.0 }),
+        ];
+
+        const { json } = files(chunks, ["Ab.", "Cd.", "Ef.", "Gh."]);
+
+        assert.deepEqual(
+            json.words.map((word) => word.text),
+            ["Ab.", "Gh."],
+        );
+        assert.deepEqual(json.silent, [1, 2]);
+    });
+
+    test("open document without parts keeps the separator like src/timestamps.py", () => {
+        const { json } = files([chunk('Ab. <break time="0.6s"/> … <break time="0.6s"/> Cd.')], null);
+
+        assert.deepEqual(
+            json.words.map((word) => word.text),
+            ["Ab.", "…", "Cd."],
+        );
+    });
+});
+
+describe("fixtures from Python", () => {
+    for (const [name, parts] of [
+        ["open-document", null],
+        ["pasted-text", edp.splitParts(readFixture("pasted-text.txt"))],
+    ]) {
         test(`${name} frames give the srt computed by Python`, () => {
             const { rec } = recordFixture(name);
 
-            const { srt } = edp.resultFiles(name, { voice: null, durationMs: rec.offsetMs, chunks: rec.chunks, parts: null, tags: false });
+            const { srt } = edp.resultFiles(name, { voice: null, durationMs: rec.offsetMs, chunks: rec.chunks, parts, tags: false });
 
             assert.equal(srt, readFixture(`${name}.srt`));
         });

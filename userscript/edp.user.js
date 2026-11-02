@@ -459,7 +459,7 @@
         return [first, last];
     }
 
-    function partSpans(chunks, parts, tags) {
+    function partRanges(chunks, parts, tags) {
         const { text, starts, ends, silent } = timeline(chunks);
         const codePoints = Array.from(text);
         const bounds = [];
@@ -474,13 +474,22 @@
         }
         return parts.map((part, line) => {
             const [first, last] = bounds[line];
-            if (codePoints.slice(first, last + 1).join("") !== neutralize(part, tags)) {
-                throw new Error(`ElevenReader line text mismatch at line ${line + 1}`);
-            }
+            const spoken = codePoints.slice(first, last + 1).join("");
+            if (spoken !== neutralize(part, tags)) throw new Error(`ElevenReader line text mismatch at line ${line + 1}`);
             if (ends[last] < starts[first]) throw new Error(`ElevenReader part timing is reversed at line ${line + 1}`);
             const unspoken = silent.slice(first, last + 1).some(Boolean);
-            return { start_ms: starts[first], end_ms: unspoken ? starts[first] : ends[last] };
+            return {
+                start_ms: starts[first],
+                end_ms: unspoken ? starts[first] : ends[last],
+                text: spoken,
+                starts: starts.slice(first, last + 1),
+                ends: ends.slice(first, last + 1),
+            };
         });
+    }
+
+    function partSpans(chunks, parts, tags) {
+        return partRanges(chunks, parts, tags).map((range) => ({ start_ms: range.start_ms, end_ms: range.end_ms }));
     }
 
     // ── Subtitles (port of src/timestamps.py) ────────────────────────────────────
@@ -555,26 +564,30 @@
     // ── Result files ─────────────────────────────────────────────────────────────
 
     function resultFiles(name, { voice, durationMs, chunks, parts, tags }) {
-        const { text, starts, ends } = timeline(chunks);
-        const entries =
-            parts === null
-                ? []
-                : partSpans(chunks, parts, tags).map((span, index) => ({
-                      index,
-                      text: parts[index],
-                      start_ms: span.start_ms,
-                      end_ms: span.end_ms,
-                      spoken: span.end_ms > span.start_ms,
-                  }));
+        let entries = [];
+        let spans;
+        if (parts === null) spans = [timeline(chunks)];
+        else {
+            const ranges = partRanges(chunks, parts, tags);
+            entries = ranges.map((range, index) => ({
+                index,
+                text: parts[index],
+                start_ms: range.start_ms,
+                end_ms: range.end_ms,
+                spoken: range.end_ms > range.start_ms,
+            }));
+            spans = ranges.filter((range) => range.end_ms > range.start_ms);
+        }
         const json = {
             audio: `${name}.mp3`,
             voice,
             duration_ms: durationMs,
             parts: entries,
-            words: splitWords(text, starts, ends).filter((word) => word !== null),
+            words: spans.flatMap((span) => splitWords(span.text, span.starts, span.ends).filter((word) => word !== null)),
             silent: entries.filter((entry) => !entry.spoken).map((entry) => entry.index),
         };
-        return { json, srt: srtText(splitSentences(text, starts, ends)) };
+        const sentences = spans.flatMap((span) => splitSentences(span.text, span.starts, span.ends));
+        return { json, srt: srtText(sentences) };
     }
 
     function readIdFromStreamUrl(url) {

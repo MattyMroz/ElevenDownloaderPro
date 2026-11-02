@@ -3,25 +3,9 @@
 Pierwsza kwestia (śmiech).
 
 2
-00:00:01,888 --> 00:00:01,966
-…
-
-3
 00:00:02,086 --> 00:00:04,316
 — Druga, z dialogiem — powiedział.
 
-4
-00:00:04,436 --> 00:00:04,514
-…
-
-5
-00:00:04,676 --> 00:00:04,746
-Trzecia część, której serwer nie wypowie mimo pełnego tekstu w porcji.
-
-6
-00:00:04,768 --> 00:00:04,769
-…
-
-7
+3
 00:00:04,702 --> 00:00:06,026
 Czwarta i ostatnia…
