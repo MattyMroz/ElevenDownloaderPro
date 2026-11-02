@@ -992,6 +992,75 @@ def test_timed_out_recording_keeps_shared_browser_until_the_others_finish(
     assert site.sessions[1].alive
 
 
+def _download(engine: ElevenReaderTtsEngine, tmp_path: Path, *, voice_id: str | None = None) -> DocumentResult:
+    return _run(
+        engine.download_document(
+            READ_ID, tmp_path / "rec" / "book.mp3", voice_id=voice_id, deadline_s=60.0, cancel=Cancellation()
+        )
+    )
+
+
+def test_download_document_records_library_document_without_upload_or_delete(
+    tmp_path: Path, engine_for: EngineFor
+) -> None:
+    site = FakeSite(texts=TEXTS, player_done=True)
+
+    result = _download(engine_for(site), tmp_path)
+
+    assert result.parts == ()
+    assert result.voice_id is None
+    assert "".join(char for chunk in result.chunks for char in chunk.chars).startswith("Pierwsza kwestia.")
+    assert result.recording.stat().st_size > 0
+    assert site.uploaded == []
+    assert site.deleted == []
+    assert site.account["default_voice_id"] == "previous-voice"
+    assert site.account["playback_speed_rate"] == 1.5
+    assert site.pages[0].closed
+
+
+def test_download_document_without_voice_keeps_account_voice_while_reading(
+    tmp_path: Path, engine_for: EngineFor
+) -> None:
+    site = FakeSite(texts=TEXTS, player_done=True)
+    voices: list[object] = []
+
+    class _Watched(FakePage):
+        async def press_play(self) -> None:
+            voices.append((self.site.account["default_voice_id"], self.site.account["playback_speed_rate"]))
+            await super().press_play()
+
+    site.page_type = _Watched
+
+    _download(engine_for(site), tmp_path)
+
+    assert voices == [("previous-voice", 1.0)]
+
+
+def test_download_document_with_voice_sets_it_and_restores_account(tmp_path: Path, engine_for: EngineFor) -> None:
+    site = FakeSite(texts=TEXTS, player_done=True)
+
+    result = _download(engine_for(site), tmp_path, voice_id="adam")
+
+    assert result.voice_id == ADAM_ID
+    assert site.account["default_voice_id"] == "previous-voice"
+    assert site.deleted == []
+
+
+def test_download_document_cancelled_before_start_opens_no_browser(tmp_path: Path, engine_for: EngineFor) -> None:
+    site = FakeSite()
+    cancel = Cancellation()
+    cancel.cancel()
+
+    with pytest.raises(TtsCancelledError):
+        _run(
+            engine_for(site).download_document(
+                READ_ID, tmp_path / "book.mp3", voice_id=None, deadline_s=60.0, cancel=cancel
+            )
+        )
+
+    assert site.sessions == []
+
+
 def test_last_engine_closing_stops_browser_and_host_thread(tmp_path: Path) -> None:
     threads: int = _hub_threads()
     site = FakeSite(texts=TEXTS)

@@ -52,7 +52,7 @@ if TYPE_CHECKING:
         UploadedRead,
     )
 
-__all__ = ["ElevenReaderTtsEngine", "document_text", "part_spans"]
+__all__ = ["ElevenReaderTtsEngine", "document_text", "part_bounds", "part_spans", "stream_timeline"]
 
 logger = get_logger(__name__)
 
@@ -69,6 +69,12 @@ _BREAK_TAG: Final[str] = "<break"
 
 _BREAK_RUN: Final[re.Pattern[str]] = re.compile(r"<break[^>]*(?:>|$)(?:\s*<break[^>]*(?:>|$))*")
 """Adjacent SSML pauses forming one boundary; the final tag may be cut off at the end of the text."""
+
+_ACCOUNT_VOICE: Final[str] = ""
+"""Voice-gate key of a download reading with the account's voice: it waits for, and holds off, every chosen voice."""
+
+_DOWNLOAD_REQUEST_ID: Final[str] = "download"
+"""Request id of a downloaded document; the read id stays out of results."""
 
 
 class ElevenReaderTtsEngine:
@@ -115,6 +121,40 @@ class ElevenReaderTtsEngine:
             cancel=cancel,
         )
 
+    async def download_document(
+        self,
+        read_id: str,
+        recording: Path,
+        *,
+        voice_id: str | None,
+        deadline_s: float,
+        cancel: Cancellation,
+    ) -> DocumentResult:
+        """Record an existing library document from its start in its own tab; the document stays in the library.
+
+        Args:
+            read_id: Library id of the document.
+            recording: MP3 file to write.
+            voice_id: Voice alias or id to set on the account, or None to read with the account's voice.
+            deadline_s: Upper limit of the whole attempt.
+            cancel: Cancellation of the caller.
+
+        Returns:
+            The recording and its stream chunks, without part timings.
+        """
+        voice: ElevenReaderVoice | None = None if voice_id is None else resolve_voice(voice_id)
+        if cancel.is_cancelled:
+            raise cancelled_error()
+        if self._closed:
+            message: str = "ElevenReader engine is closed"
+            raise unavailable_error(message)
+        return await self._hub.record(
+            partial(self._download, read_id, recording, voice),
+            voice_id=_ACCOUNT_VOICE if voice is None else voice.voice_id,
+            deadline_s=deadline_s,
+            cancel=cancel,
+        )
+
     async def close(self) -> None:
         """Leave the profile's host; the last engine to leave cleans the account and stops Chrome."""
         if self._closed:
@@ -153,34 +193,87 @@ class ElevenReaderTtsEngine:
             prepare_account(page, uploaded.token, voice.voice_id, attempt.account, attempt.save),
             cancel,
         )
-        request.recording.parent.mkdir(parents=True, exist_ok=True)
+        recorder: StreamRecorder = await self._stream(
+            attempt,
+            uploaded.read_id,
+            request.recording,
+            voice,
+            char_count=uploaded.char_count,
+            progress=request.progress,
+        )
+        elapsed_ms: float = (time.monotonic() - attempt.entered_at) * 1000
+        return self._result(request, voice, recorder, uploaded.char_count, elapsed_ms)
+
+    async def _download(
+        self,
+        read_id: str,
+        recording: Path,
+        voice: ElevenReaderVoice | None,
+        attempt: ReaderAttempt,
+    ) -> DocumentResult:
+        token: str | None = attempt.page.token
+        if not token:
+            message: str = "ElevenReader library gave no account token"
+            raise unavailable_error(message)
+        await unless_cancelled(
+            prepare_account(
+                attempt.page, token, None if voice is None else voice.voice_id, attempt.account, attempt.save
+            ),
+            attempt.cancel,
+        )
+        recorder: StreamRecorder = await self._stream(
+            attempt, read_id, recording, voice, char_count=None, progress=None
+        )
+        elapsed_ms: float = (time.monotonic() - attempt.entered_at) * 1000
+        logger.info("ElevenReader document downloaded", chars=recorder.chars, elapsed_ms=elapsed_ms)
+        return DocumentResult(
+            request_id=_DOWNLOAD_REQUEST_ID,
+            recording=recording,
+            voice_id=None if voice is None else voice.voice_id,
+            request_time_ms=elapsed_ms,
+            parts=(),
+            chunks=recorder.chunks,
+        )
+
+    async def _stream(  # noqa: PLR0913 - one stream needs its tab, document, file, voice, length and progress
+        self,
+        attempt: ReaderAttempt,
+        read_id: str,
+        recording: Path,
+        voice: ElevenReaderVoice | None,
+        *,
+        char_count: int | None,
+        progress: Callable[[int, int], Awaitable[None]] | None,
+    ) -> StreamRecorder:
+        page: ReaderPage = attempt.page
+        cancel: Cancellation = attempt.cancel
+        recording.parent.mkdir(parents=True, exist_ok=True)
         stream_voices: list[bool] = []
-        with request.recording.open("wb") as output:
+        with recording.open("wb") as output:
             recorder: StreamRecorder = StreamRecorder(output)
-            page.watch_stream(recorder, lambda url: stream_voices.append(voice.voice_id in url))
+            page.watch_stream(recorder, lambda url: stream_voices.append(voice is None or voice.voice_id in url))
             try:
-                await unless_cancelled(page.open_document(uploaded.read_id), cancel)
+                await unless_cancelled(page.open_document(read_id), cancel)
                 await unless_cancelled(page.set_page_speed(PAGE_SPEED), cancel)
                 await unless_cancelled(page.press_play(), cancel)
                 played_at: float = time.monotonic()
                 await _stream_opened(recorder, stream_voices, played_at, cancel)
                 attempt.started()
-                await self._record(page, recorder, request, uploaded.char_count, cancel, played_at=played_at)
+                await self._record(page, recorder, char_count, progress, cancel, played_at=played_at)
             finally:
                 page.unwatch_stream()
                 recorder.stop()
-        if not any(stream_voices):
+        if voice is not None and not any(stream_voices):
             message: str = "ElevenReader stream address did not carry the selected voice"
             raise voice_error(message)
-        elapsed_ms: float = (time.monotonic() - attempt.entered_at) * 1000
-        return self._result(request, voice, recorder, uploaded.char_count, elapsed_ms)
+        return recorder
 
-    async def _record(  # noqa: PLR0913 - one recording loop needs its tab, stream, request and Play moment
+    async def _record(  # noqa: PLR0913 - one recording loop needs its tab, stream, length, progress and Play moment
         self,
         page: ReaderPage,
         recorder: StreamRecorder,
-        request: DocumentSynthesisRequest,
-        char_count: int,
+        char_count: int | None,
+        progress: Callable[[int, int], Awaitable[None]] | None,
         cancel: Cancellation,
         *,
         played_at: float,
@@ -212,8 +305,8 @@ class ElevenReaderTtsEngine:
                 continue
             if recorder.audio_bytes != last_bytes:
                 last_bytes, last_progress = recorder.audio_bytes, now
-                if request.progress is not None:
-                    await request.progress(min(recorder.chars, char_count), char_count)
+                if progress is not None and char_count is not None:
+                    await progress(min(recorder.chars, char_count), char_count)
             if await self._finished(page, recorder, char_count, cancel) and now - last_progress >= END_IDLE_S:
                 return
             if now - last_progress >= STALL_S:
@@ -221,9 +314,9 @@ class ElevenReaderTtsEngine:
                 raise timeout_error(reason)
 
     async def _finished(
-        self, page: ReaderPage, recorder: StreamRecorder, char_count: int, cancel: Cancellation
+        self, page: ReaderPage, recorder: StreamRecorder, char_count: int | None, cancel: Cancellation
     ) -> bool:
-        if recorder.chars >= char_count:
+        if char_count is not None and recorder.chars >= char_count:
             return True
         state: PlayerState = await unless_cancelled(page.player_state(), cancel)
         return state.length > 0 and state.length - state.value <= END_SLACK_CHARS
@@ -289,22 +382,9 @@ def part_spans(
     Raises:
         TtsClipValidationError: The streamed text does not split into the parts or a part's timing is reversed.
     """
-    text: str = "".join(char for chunk in chunks for char in chunk.chars)
+    text, starts, ends = stream_timeline(chunks)
     silent: list[bool] = [chunk.silent for chunk in chunks for _ in chunk.chars]
-    starts: list[float] = [chunk.offset_ms + start for chunk in chunks for start in chunk.starts_ms]
-    ends: list[float] = [
-        chunk.offset_ms + start + duration
-        for chunk in chunks
-        for start, duration in zip(chunk.starts_ms, chunk.durations_ms, strict=True)
-    ]
-    bounds: list[tuple[int, int]] = []
-    cursor: int = 0
-    for match in (*_BREAK_RUN.finditer(text), None):
-        stop: int = len(text) if match is None else match.start()
-        bound: tuple[int, int] | None = _segment(text, cursor, stop)
-        if bound is not None:
-            bounds.append(bound)
-        cursor = len(text) if match is None else match.end()
+    bounds: tuple[tuple[int, int], ...] = part_bounds(text)
     if len(bounds) != len(parts):
         _raise_clip("ElevenReader line count mismatch", received=len(bounds), expected=len(parts))
     timings: list[PartTiming] = []
@@ -316,6 +396,35 @@ def part_spans(
         end_ms: float = starts[first] if any(silent[first : last + 1]) else ends[last]
         timings.append(PartTiming(request_id=part.request_id, start_ms=starts[first], end_ms=end_ms))
     return tuple(timings)
+
+
+def stream_timeline(chunks: tuple[AlignmentChunk, ...]) -> tuple[str, list[float], list[float]]:
+    """Return the streamed text with the start and end of every character on the recording timeline."""
+    text: str = "".join(char for chunk in chunks for char in chunk.chars)
+    starts: list[float] = [chunk.offset_ms + start for chunk in chunks for start in chunk.starts_ms]
+    ends: list[float] = [
+        chunk.offset_ms + start + duration
+        for chunk in chunks
+        for start, duration in zip(chunk.starts_ms, chunk.durations_ms, strict=True)
+    ]
+    return text, starts, ends
+
+
+def part_bounds(text: str) -> tuple[tuple[int, int], ...]:
+    """Return the first and last character index of every part in the streamed *text*.
+
+    Parts are the runs between break tags, trimmed of whitespace; a run holding only the separator paragraph is not a
+    part.
+    """
+    bounds: list[tuple[int, int]] = []
+    cursor: int = 0
+    for match in (*_BREAK_RUN.finditer(text), None):
+        stop: int = len(text) if match is None else match.start()
+        bound: tuple[int, int] | None = _segment(text, cursor, stop)
+        if bound is not None:
+            bounds.append(bound)
+        cursor = len(text) if match is None else match.end()
+    return tuple(bounds)
 
 
 def _neutralize(text: str, *, tags: bool = False) -> str:

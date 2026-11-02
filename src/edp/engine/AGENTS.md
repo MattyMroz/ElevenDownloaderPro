@@ -7,8 +7,14 @@ silnik. Zmiany względem AniShift ogranicza plan `docs/plans/01-full-refactor.md
 
 ## Moduły
 
-- `config.py`, `constants.py`, `types.py`, `service.py` (silnik, `document_text`, `part_spans`) i `api_backend.py`
-  (karta Playwright: `ReaderPage`, konto, sesja, mapowanie błędów dostawcy).
+- `config.py`, `constants.py`, `types.py`, `service.py` (silnik, `document_text`, `part_spans`, `stream_timeline`,
+  `part_bounds`) i `api_backend.py` (karta Playwright: `ReaderPage`, konto, sesja, mapowanie błędów dostawcy).
+- `part_bounds` jest jedynym miejscem, które dzieli strumieniowany tekst na części; `part_spans` i `subtitles.py`
+  liczą z niego zakresy znaków, więc separator `…` i `<break>` nigdy nie stają się słowem.
+- `synthesize_document` wgrywa dokument i go usuwa; `download_document` nagrywa istniejący dokument z biblioteki bez
+  uploadu i bez sprzątania dokumentu, z głosem konta (`voice_id=None`) albo podanym. Koniec nagrania rozpoznaje
+  wyłącznie stan odtwarzacza, bo bez uploadu nie ma `char_count`; wynik ma `parts=()`. Bramka głosu traktuje głos
+  konta jako osobny klucz (`_ACCOUNT_VOICE`), więc pobieranie nie nagrywa razem z innym wybranym głosem.
 - `browser.py` (proces Chrome i CDP; tu też `ChromeMissingError` i `ChromeBusyError`), `hub.py` (`ReaderHub`: jedna
   przeglądarka profilu w procesie, karta na nagranie, wspólne sprzątanie konta) oraz `recorder.py` (czyste ramki
   WebSocket → MP3 i czasy znaków, testowane bez przeglądarki).

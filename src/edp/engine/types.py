@@ -195,11 +195,11 @@ class AlignmentChunk:
 
 @dataclass(frozen=True, slots=True)
 class DocumentResult:
-    """Recording, part timings and stream chunks produced by one document attempt."""
+    """Recording, part timings and stream chunks of one attempt; a download has no parts and maybe no voice."""
 
     request_id: str
     recording: Path
-    voice_id: str
+    voice_id: str | None
     request_time_ms: float
     parts: tuple[PartTiming, ...]
     chunks: tuple[AlignmentChunk, ...]

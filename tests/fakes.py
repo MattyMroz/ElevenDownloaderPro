@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import math
 import threading
 import time
 from dataclasses import dataclass, field, replace
@@ -13,12 +14,23 @@ from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from edp.engine import ElevenReaderConfig, ElevenReaderTtsEngine, resolve_voice
 from edp.engine.api_backend import document_titles
-from edp.engine.types import DocumentTrace, LibraryState, PlayerState, UploadedRead
+from edp.engine.service import part_spans
+from edp.engine.types import (
+    AlignmentChunk,
+    DocumentResult,
+    DocumentSynthesisRequest,
+    DocumentTrace,
+    LibraryState,
+    PlayerState,
+    UploadedRead,
+)
 from edp.errors import TtsProviderUnavailableError
+from edp.utils.mp3_frames import frames_duration_ms
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from edp.cancellation import Cancellation
     from edp.engine.browser import ChromeSession
     from edp.engine.recorder import StreamRecorder
     from edp.engine.types import AccountCleanup
@@ -220,8 +232,7 @@ class FakePage:
             self.site.reads.remove(read_id)
 
     async def open_document(self, read_id: str) -> None:
-        assert self.upload_index is not None
-        assert read_id == read_id_of(self.upload_index)
+        assert read_id == (READ_ID if self.upload_index is None else read_id_of(self.upload_index))
         await self._step("open_document")
 
     async def press_play(self) -> None:
@@ -500,3 +511,66 @@ class FakePlaywrightPage:
         assert headers == {"authorization": TOKEN}
         self.calls.append((method, url))
         return self.replies.get((method, url), FakeResponse(200, {}))
+
+
+def _no_browser(profile_root: Path) -> ChromeSession:
+    message: str = f"scripted engine opened a browser on {profile_root}"
+    raise AssertionError(message)
+
+
+class ScriptedEngine(ElevenReaderTtsEngine):
+    def __init__(
+        self,
+        root: Path,
+        *,
+        speaks_up_to: dict[str, int] | None = None,
+        failures: list[Exception] | None = None,
+        lead_frames: int = 0,
+    ) -> None:
+        super().__init__(engine_config(root), browser_factory=_no_browser)
+        self.lead_frames: int = lead_frames
+        self.speaks_up_to: dict[str, int] = speaks_up_to or {}
+        self.failures: list[Exception] = failures or []
+        self.documents: list[tuple[str, ...]] = []
+        self.calls: int = 0
+        self.closed: bool = False
+
+    async def synthesize_document(self, request: DocumentSynthesisRequest, *, cancel: Cancellation) -> DocumentResult:
+        self.calls += 1
+        if self.failures:
+            raise self.failures.pop(0)
+        number: int = len(self.documents)
+        self.documents.append(tuple(part.request_id for part in request.parts))
+        chunks: list[AlignmentChunk] = []
+        audio: bytes = mp3_frames(self.lead_frames, fill=99)
+        for index, part in enumerate(request.parts):
+            last: bool = index == len(request.parts) - 1
+            text: str = " ".join(part.text.replace("[", "(").replace("]", ")").split())
+            text += ' <break time="2s"/>' if last else f" {BREAK} … {BREAK} "
+            silent: bool = self.speaks_up_to.get(part.text, len(request.parts)) < len(request.parts)
+            step_ms: float = 1.0 if silent else 10.0
+            frames: int = 1 if silent else math.ceil(len(text) * step_ms / FRAME_MS) + 1
+            chunk_audio: bytes = mp3_frames(frames, fill=number * 10 + index + 1)
+            chunks.append(
+                AlignmentChunk(
+                    offset_ms=frames_duration_ms(audio),
+                    chars=tuple(text),
+                    starts_ms=tuple(position * step_ms for position in range(len(text))),
+                    durations_ms=(step_ms,) * len(text),
+                    silent=silent,
+                )
+            )
+            audio += chunk_audio
+        request.recording.write_bytes(audio)
+        return DocumentResult(
+            request_id=request.request_id,
+            recording=request.recording,
+            voice_id=request.voice_id,
+            request_time_ms=0.0,
+            parts=part_spans(tuple(chunks), request.parts, tags=request.tags),
+            chunks=tuple(chunks),
+        )
+
+    async def close(self) -> None:
+        self.closed = True
+        await super().close()

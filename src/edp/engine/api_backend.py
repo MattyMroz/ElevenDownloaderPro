@@ -512,18 +512,18 @@ def _off_speed(state: dict[str, object], speed: float) -> bool:
 async def prepare_account(
     page: ReaderPage,
     token: str,
-    voice_id: str,
+    voice_id: str | None,
     cleanup: AccountCleanup,
     save: Callable[[], None],
 ) -> None:
-    """Set the account voice and speed 1x after registering (then *save*) the restore; refuse a voice not taken."""
+    """Set speed 1x and the voice unless None after registering (then *save*) the restore; refuse settings not taken."""
     current: dict[str, object] = await page.get_json(USER_CONFIG_URL, token, action="read_account")
     if cleanup.restore is None:
         cleanup.restore = _settings(current)
         save()
     await page.post_json(USER_CONFIG_URL, token, _with_settings(current, voice_id, READING_SPEED), action="set_account")
     check: AccountSettings = _settings(await page.get_json(USER_CONFIG_URL, token, action="check_account"))
-    if check.voice_id != voice_id or check.speed != READING_SPEED:
+    if (voice_id is not None and check.voice_id != voice_id) or check.speed != READING_SPEED:
         message: str = "ElevenReader account did not take the voice or reading speed"
         raise voice_error(message)
 
