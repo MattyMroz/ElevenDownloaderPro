@@ -1,0 +1,11 @@
+1
+00:00:00,000 --> 00:00:01,768
+Pierwsza kwestia (śmiech).
+
+2
+00:00:02,086 --> 00:00:04,316
+— Druga, z dialogiem — powiedział.
+
+3
+00:00:04,702 --> 00:00:06,026
+Czwarta i ostatnia…
