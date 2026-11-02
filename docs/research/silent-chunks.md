@@ -1,6 +1,8 @@
 # Cicha porcja: ElevenReader zwraca tekst bez mowy
 
-Stan na 2026-11-01. Źródła: nagrania `workspace/output/` (MS3_002–MS3_009, SS_3201-3225, SS_3201-3225_v2, testy `T*`, `P*`), dwa nagrania `MS3_009` (`bad_MS3_009/`, `run2_MS3_009/`), logi `auto.py`, `src/downloader.py`, `src/timestamps.py` oraz silnik `AniShift/anishift/services/tts/engines/elevenreader/` (commit `f595718`). Wszystkie liczby to pomiary, chyba że zaznaczono inaczej.
+Notatka opisuje porcje strumienia, w których ElevenReader oddaje pełny tekst prawie bez dźwięku: objaw, wykrywanie i naprawę; stan na 2026-11-01.
+
+Źródła: nagrania `workspace/output/` (MS3_002–MS3_009, SS_3201-3225, SS_3201-3225_v2, testy `T*`, `P*`), dwa nagrania `MS3_009` (`bad_MS3_009/`, `run2_MS3_009/`), logi nagrań i kod dawnych skryptów EDP (commit `a55aecd`) oraz silnik `AniShift/anishift/services/tts/engines/elevenreader/` (commit `f595718`). Wszystkie liczby to pomiary, chyba że zaznaczono inaczej.
 
 ## W skrócie
 
@@ -9,7 +11,7 @@ Stan na 2026-11-01. Źródła: nagrania `workspace/output/` (MS3_002–MS3_009, 
 - Wykrycie jest pewne i tanie: porcja z co najmniej 20 literami i dźwiękiem krótszym niż 10 ms na literę. Na 25 792 porcjach ze wszystkich nagrań próg łapie 6 wadliwych (1,3–1,5 ms/literę) i nie daje żadnego fałszywego alarmu (najniższa zdrowa: 20 ms/literę, mediana 88).
 - Błąd jest deterministyczny dla danego dokumentu: dwa niezależne nagrania `MS3_009` dały ciszę w tej samej porcji, co do milisekundy (3 649 410,6–3 650 246,5 ms). Nie da się go jednak odtworzyć samym tekstem porcji: ta sama porcja jako osobny dokument nagrała się w całości.
 - Naprawa bez zmiany tekstu działa: nagrać samą porcję jako osobny dokument i wkleić jej MP3 w miejsce cichej porcji (po bajtach, na granicy ramek).
-- AniShift (silnik `elevenreader`) jest na to podatny: odrzuca tylko kwestię o zerowej długości, a tu długość jest niezerowa (1 ms na znak).
+- AniShift (silnik `elevenreader` przy commicie `f595718`) jest na to podatny: odrzuca tylko kwestię o zerowej długości, a tu długość jest niezerowa (1 ms na znak).
 
 ## 1. Objaw
 
@@ -30,7 +32,7 @@ Ten sam ślad wcześniej, w `SS_3201-3225_v2` (wtedy niezauważony): porcje 133�
 
 ## 2. Gdzie powstaje
 
-Na serwerze. `Recorder.write_chunk` (`src/downloader.py`) zapisuje bajty `audio` i `alignment` z ramki bez zmian. Deduplikacja i `trim_chunk` nie działały: w logu nie ma `skipped` ani `trimmed`. Długość porcji w pliku (835,9 ms) jest równa sumie ramek MP3 z samej ramki WebSocket, a więc serwer wysłał tyle dźwięku.
+Na serwerze. Dawny rejestrator EDP (`Recorder.write_chunk`) zapisywał bajty `audio` i `alignment` z ramki bez zmian. Deduplikacja i `trim_chunk` nie działały: w logu nie ma `skipped` ani `trimmed`. Długość porcji w pliku (835,9 ms) jest równa sumie ramek MP3 z samej ramki WebSocket, a więc serwer wysłał tyle dźwięku.
 
 Ślad „1 ms na znak” wygląda na zastępczy alignment, który serwer wstawia, gdy synteza porcji nie dała mowy. Przyczyny po stronie serwera nie znamy.
 
@@ -64,15 +66,15 @@ Rozmiar porcji zależy od serwera, nie od nas. Przy jednym nagraniu naraz porcje
 Odtwarzalność:
 
 - **Na żywo:** pewna tylko przez pełny dokument nagrywany w pojedynkę (`MS3_009`, ok. 2–3 min przy 64x). Tańszego wyzwalacza nie znaleźliśmy.
-- **W testach:** nie potrzeba sieci. Fiksturą jest ramka z porcji 69 (alignment z `run2_MS3_009/MS3_009.align.jsonl`, linia 70, plus 836 ms MP3 wycięte z `MS3_009.mp3` funkcją `mp3_cut_ms` między offsetami z punktu 1). Test: rejestrator albo walidator ma odrzucić tę porcję.
+- **W testach:** nie potrzeba sieci. Fiksturą jest ramka z porcji 69 (alignment z `run2_MS3_009/MS3_009.align.jsonl`, linia 70, plus 836 ms MP3 wycięte z `MS3_009.mp3` po ramkach między offsetami z punktu 1). Test: rejestrator albo walidator ma odrzucić tę porcję.
 
 ## 5. Wykrywanie
 
 Reguła na porcję (ramkę z `audio` i `alignment`):
 
-```
+```text
 litery = liczba znaków \w w tekście porcji po usunięciu tagów <...>
-dźwięk = czas ramek MP3 tej porcji (mp3_duration_ms)
+dźwięk = czas ramek MP3 tej porcji
 wadliwa, gdy litery >= 20 i dźwięk / litery < 10 ms
 ```
 
@@ -89,16 +91,16 @@ Sprawdzone na `MS3_009`:
 
 1. Nagrać tekst cichej porcji jako osobny dokument. W teście przyszedł w jednej porcji z pełną mową.
 2. Uciąć jego końcową ciszę (koniec dokumentu, ok. 2,2 s) do ~0,6 s za ostatnim znakiem z alignmentu.
-3. W nagraniu głównym wyciąć bajty cichej porcji. Granice wyznacza `mp3_cut_ms` od początku pliku dla `offset_ms` porcji i następnej, a w ich miejsce wstawić bajty z kroku 2. Format jest ten sam (MP3 128 kb/s, mono, 44,1 kHz), więc bez ponownego kodowania.
+3. W nagraniu głównym wyciąć bajty cichej porcji. Granice wyznacza cięcie po ramkach od początku pliku dla `offset_ms` porcji i następnej, a w ich miejsce wstawić bajty z kroku 2. Format jest ten sam (MP3 128 kb/s, mono, 44,1 kHz), więc bez ponownego kodowania.
 4. Sprawdzić: długość = stara − 835,9 ms + nowa porcja; brak ciszy > 0,8 s w okolicy wklejki.
 
-Nie tnij po czasie z dekodera (`ffmpeg atrim`). Pliki z downloadera mają uszkodzone ramki („Header missing”), dekoder je pomija i czas się przesuwa: w teście o 4,4 s.
+Nie tnij po czasie z dekodera (`ffmpeg atrim`). Pliki nagrane dawnym downloaderem EDP mają uszkodzone ramki („Header missing”), dekoder je pomija i czas się przesuwa: w teście o 4,4 s.
 
 Ponowne nagranie całego dokumentu nie pomaga: wynik jest ten sam (2/2). Zmiana tekstu („uduszę”) pomaga tylko w osobnym dokumencie; w pełnym rozdziale tego nie sprawdziliśmy.
 
 ## 7. AniShift
 
-`anishift/services/tts/engines/elevenreader/recorder.py` ma tę samą logikę co `src/downloader.py`.
+`anishift/services/tts/engines/elevenreader/recorder.py` (commit `f595718`) ma tę samą logikę co dawny rejestrator EDP.
 
 - `service.py` sprawdza:
   - sumę znaków (`recorder.chars` vs `char_count`);
@@ -116,3 +118,12 @@ Ponowne nagranie całego dokumentu nie pomaga: wynik jest ten sam (2/2). Zmiana 
 
 - Co dokładnie wywołuje błąd (treść, kontekst, długość porcji)? Wymagałoby serii nagrań pełnego dokumentu z jedną zmianą naraz, po ok. 3 min każde.
 - Czy serwer kiedyś sygnalizuje to polem `notice`? W znanych przypadkach było `null`.
+
+## Stan w edp
+
+Reguła z punktu 5 (co najmniej 20 liter i mniej niż 10 ms dźwięku na literę) działa w dwóch miejscach:
+
+- w rejestratorze silnika (`src/edp/engine/recorder.py`), który liczy dźwięk porcji z ramek MP3 (`mp3_frames.frames_duration_ms`) i oznacza porcję jako cichą; część tekstu, której dotyczy cicha porcja, wychodzi z silnika jako niewypowiedziana (`spoken == False`);
+- w userscripcie `userscript/edp.user.js`, gdzie cicha porcja daje ostrzeżenie w panelu.
+
+`reading.py` czyta ciche części ponownie: razem jako jeden mniejszy dokument, a części wciąż ciche osobno, najwyżej dwa ponowne odczyty na część. Wynik skleja po ramkach MP3, bez dekodowania, czyli tak jak ręczna naprawa z punktu 6. Część cicha po wszystkich próbach trafia do pola `silent` w `<nazwa>.json`, a `edp` kończy się kodem wyjścia 3.
