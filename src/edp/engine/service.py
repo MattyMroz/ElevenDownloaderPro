@@ -52,7 +52,7 @@ if TYPE_CHECKING:
         UploadedRead,
     )
 
-__all__ = ["ElevenReaderTtsEngine", "document_text", "part_bounds", "part_spans", "stream_timeline"]
+__all__ = ["PART_GLUE", "ElevenReaderTtsEngine", "document_text", "part_bounds", "part_spans", "stream_timeline"]
 
 logger = get_logger(__name__)
 
@@ -61,7 +61,7 @@ logger = get_logger(__name__)
 _BRACKETS: Final[dict[int, str]] = str.maketrans({"[": "(", "]": ")"})
 """Square brackets, which ElevenReader reads as audio tags, mapped to round ones."""
 
-_PART_GLUE: Final[str] = f"\n\n{LINE_SEPARATOR}\n\n"
+PART_GLUE: Final[str] = f"\n\n{LINE_SEPARATOR}\n\n"
 """Text between parts: a separator paragraph, so the server pauses and marks breaks around it."""
 
 _BREAK_TAG: Final[str] = "<break"
@@ -287,6 +287,8 @@ class ElevenReaderTtsEngine:
             await unless_cancelled(asyncio.sleep(POLL_S), cancel)
             if recorder.write_error is not None:
                 raise _write_error(recorder.write_error)
+            if char_count is None and recorder.start_position:
+                raise _resumed_error(recorder.start_position)
             if recorder.listening_speed not in (None, READING_SPEED):
                 message: str = "ElevenReader streamed with Eleven v2 instead of v4"
                 raise unavailable_error(message)
@@ -363,7 +365,7 @@ def document_text(parts: tuple[DocumentPart, ...], *, tags: bool = False) -> str
     Returns:
         The document text with single spaces inside each part.
     """
-    return _PART_GLUE.join(_neutralize(part.text, tags=tags) for part in parts) + "\n"
+    return PART_GLUE.join(_neutralize(part.text, tags=tags) for part in parts) + "\n"
 
 
 def part_spans(
@@ -462,6 +464,16 @@ async def _stream_opened(
 ) -> None:
     while not addresses and not recorder.audio_bytes and time.monotonic() - played_at < START_TIMEOUT_S:
         await unless_cancelled(asyncio.sleep(POLL_S), cancel)
+
+
+def _resumed_error(position: float) -> TtsInputError:
+    context: ErrorContext = ErrorContext(
+        code=ErrorCode.TTS_INPUT_INVALID,
+        message=f"The document resumes at character {position:.0f}, not at its beginning",
+        suggestion="Rewind the document to its beginning in ElevenReader and run the command again.",
+        details={"position": position},
+    )
+    return TtsInputError(context=context)
 
 
 def _write_error(error: OSError) -> TtsClipValidationError:

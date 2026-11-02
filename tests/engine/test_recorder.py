@@ -231,3 +231,21 @@ def test_on_frame_silent_chunk_logs_its_index_and_numbers_without_text() -> None
     assert (extra["chunk"], extra["letters"], extra["audio_ms"]) == (1, 20, pytest.approx(26.1))
     assert "Zdanie" not in str(warnings[0])
     assert [chunk.silent for chunk in recorder.chunks] == [False, True]
+
+
+def test_on_sent_first_position_before_text_is_the_start_position() -> None:
+    recorder = StreamRecorder(io.BytesIO())
+
+    recorder.on_sent(json.dumps({"listening_speed": 1.0, "position": 120}))
+    recorder.on_sent(json.dumps({"position": 0}))
+
+    assert recorder.start_position == 120.0
+
+
+def test_on_sent_position_after_text_arrived_is_not_the_start_position() -> None:
+    recorder = StreamRecorder(io.BytesIO())
+    recorder.on_frame(audio_frame("Ala ma kota."))
+
+    recorder.on_sent(json.dumps({"position": 12}))
+
+    assert recorder.start_position is None

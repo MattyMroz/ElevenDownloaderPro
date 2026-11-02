@@ -1046,6 +1046,22 @@ def test_download_document_with_voice_sets_it_and_restores_account(tmp_path: Pat
     assert site.deleted == []
 
 
+def test_download_document_resumed_in_the_middle_is_refused_and_cleans_account(
+    tmp_path: Path, engine_for: EngineFor
+) -> None:
+    site = FakeSite(texts=TEXTS, player_done=True, start_position=120)
+
+    with pytest.raises(TtsInputError) as error:
+        _download(engine_for(site), tmp_path)
+
+    assert error.value.context.details == {"position": 120.0}
+    assert "Rewind" in error.value.context.suggestion
+    assert site.plays == 1
+    assert site.account["default_voice_id"] == "previous-voice"
+    assert site.account["playback_speed_rate"] == 1.5
+    assert site.pages[0].closed
+
+
 def test_download_document_cancelled_before_start_opens_no_browser(tmp_path: Path, engine_for: EngineFor) -> None:
     site = FakeSite()
     cancel = Cancellation()

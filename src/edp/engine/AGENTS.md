@@ -15,6 +15,8 @@ silnik. Zmiany względem AniShift ogranicza plan `docs/plans/01-full-refactor.md
   uploadu i bez sprzątania dokumentu, z głosem konta (`voice_id=None`) albo podanym. Koniec nagrania rozpoznaje
   wyłącznie stan odtwarzacza, bo bez uploadu nie ma `char_count`; wynik ma `parts=()`. Bramka głosu traktuje głos
   konta jako osobny klucz (`_ACCOUNT_VOICE`), więc pobieranie nie nagrywa razem z innym wybranym głosem.
+- `StreamRecorder.start_position` to `position` z pierwszej ramki wysłanej przez stronę, zanim przyszedł tekst.
+  Download z `start_position` > 0 kończy się `TtsInputError` (bez ponowień): strona wznawia dokument od środka.
 - `browser.py` (proces Chrome i CDP; tu też `ChromeMissingError` i `ChromeBusyError`), `hub.py` (`ReaderHub`: jedna
   przeglądarka profilu w procesie, karta na nagranie, wspólne sprzątanie konta) oraz `recorder.py` (czyste ramki
   WebSocket → MP3 i czasy znaków, testowane bez przeglądarki).

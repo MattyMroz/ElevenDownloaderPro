@@ -131,6 +131,7 @@ class FakeSite:
     ignore_voice: bool = False
     voice_in_url: bool = True
     listening_speed: float = 1.0
+    start_position: int = 0
     frames: list[str] | None = None
     char_count: int | None = None
     send_audio: bool = True
@@ -244,7 +245,9 @@ class FakePage:
         self.site.events.append(f"stream_{self.upload_index}")
         self.site.streams += 1
         self._on_url(f"wss://api.elevenlabs.io/v1/reader/reads/stream/v2/{READ_ID}?voice_id={voice}")
-        self._recorder.on_sent(json.dumps({"listening_speed": self.site.listening_speed}))
+        self._recorder.on_sent(
+            json.dumps({"listening_speed": self.site.listening_speed, "position": self.site.start_position})
+        )
         for frame in self.site.stream():
             self._recorder.on_frame(frame)
 
