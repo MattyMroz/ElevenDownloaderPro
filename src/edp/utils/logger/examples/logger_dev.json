@@ -1,0 +1,27 @@
+{
+  "name": "app",
+  "level": "DEBUG",
+  "console_enabled": true,
+  "console_level": "DEBUG",
+  "file_level": "DEBUG",
+  "console": {
+    "show_time": true,
+    "show_date": false,
+    "time_format": "HH:MM:SS.ms",
+    "show_level": true,
+    "show_logger_name": true,
+    "show_context": true,
+    "show_location": true
+  },
+  "file": {
+    "enable": true,
+    "path": "logs/dev.log.jsonl",
+    "rotation": "50 MB",
+    "retention": "7 days",
+    "compression": "zip",
+    "include_location": true,
+    "include_process": false,
+    "include_thread": false,
+    "indent": 2
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "app",
+  "level": "ERROR",
+  "console_enabled": false,
+  "console_level": null,
+  "file_level": "ERROR",
+  "console": {
+    "show_time": false,
+    "show_date": false,
+    "show_level": false,
+    "show_logger_name": false,
+    "show_context": false,
+    "show_location": false
+  },
+  "file": {
+    "enable": true,
+    "path": "logs/errors.log.jsonl",
+    "rotation": "200 MB",
+    "retention": "90 days",
+    "compression": "gz",
+    "include_location": true,
+    "include_process": true,
+    "include_thread": true,
+    "indent": null
+  }
+}

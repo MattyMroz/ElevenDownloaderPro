@@ -1,0 +1,27 @@
+{
+  "name": "app",
+  "level": "INFO",
+  "console_enabled": true,
+  "console_level": "INFO",
+  "file_level": "INFO",
+  "console": {
+    "show_time": true,
+    "show_date": false,
+    "time_format": "HH:MM:SS.ms",
+    "show_level": true,
+    "show_logger_name": true,
+    "show_context": false,
+    "show_location": false
+  },
+  "file": {
+    "enable": true,
+    "path": "logs/app.log.jsonl",
+    "rotation": "100 MB",
+    "retention": "30 days",
+    "compression": "zip",
+    "include_location": true,
+    "include_process": false,
+    "include_thread": false,
+    "indent": null
+  }
+}
