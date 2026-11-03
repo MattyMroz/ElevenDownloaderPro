@@ -48,6 +48,7 @@ BREAK = '<break time="0.6s"/>'
 FRAME_HEADER = bytes((0xFF, 0xFB, 0x90, 0x64))
 FRAME_BYTES = 417
 FRAME_MS = 1152 * 1000 / 44_100
+BROKEN_FRAME = FRAME_HEADER + bytes(100)
 
 
 def mp3_frames(count: int, *, fill: int = 0) -> bytes:
@@ -529,9 +530,11 @@ class ScriptedEngine(ElevenReaderTtsEngine):
         speaks_up_to: dict[str, int] | None = None,
         failures: list[Exception] | None = None,
         lead_frames: int = 0,
+        splices: bool = False,
     ) -> None:
         super().__init__(engine_config(root), browser_factory=_no_browser)
         self.lead_frames: int = lead_frames
+        self.splices: bool = splices
         self.speaks_up_to: dict[str, int] = speaks_up_to or {}
         self.failures: list[Exception] = failures or []
         self.documents: list[tuple[str, ...]] = []
@@ -554,6 +557,8 @@ class ScriptedEngine(ElevenReaderTtsEngine):
             step_ms: float = 1.0 if silent else 10.0
             frames: int = 1 if silent else math.ceil(len(text) * step_ms / FRAME_MS) + 1
             chunk_audio: bytes = mp3_frames(frames, fill=number * 10 + index + 1)
+            if self.splices:
+                chunk_audio += BROKEN_FRAME
             chunks.append(
                 AlignmentChunk(
                     offset_ms=frames_duration_ms(audio),

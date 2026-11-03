@@ -53,6 +53,9 @@ node --test userscript/
 - Głos i tempo to ustawienia całego konta ElevenReader (`user_config`): `edp` i AniShift na tym samym koncie naraz
   nadpisują sobie głos i limit 2 strumieni na urządzenie.
 - Ten sam tekst z tym samym głosem serwer oddaje z cache jako identyczne MP3; nowe ujęcie wymaga zmienionego tekstu.
+- Silnik, `PartTiming` i sklejanie liczą czas na osi serwera, a dekoder pomija jedną ramkę na każdym szwie strumienia
+  (`mp3_frames.splice_times`). Czasy i `duration_ms` w `.json` oraz `.srt` przechodzą przez `to_decoded` dopiero przy
+  zapisie wyników (`reading._decoded_time`, w userscripcie `decodedTime`).
 - Twarde zabicie `edp` zostawia Chrome na profilu; Ctrl+C idzie przez anulowanie i łagodne zamknięcie (kod 4).
 - `edp download` odmawia (kod 2) dokumentu, który strona wznawia od środka (`position` > 0 w pierwszej wysłanej
   ramce); przewinięcia na początek przed Play nie znamy.

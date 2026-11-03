@@ -24,6 +24,10 @@ completed: 2026-11-03
   ponowienia błędów przejściowych, sklejanie MP3 po ramkach. `subtitles.py`: słowa i SRT.
 - Userscript `userscript/edp.user.js` z tym samym kontraktem: nagrywa od otwarcia strumienia, reguły rejestratora
   silnika, tryb „wklej tekst i nagraj”, te same trzy pliki wynikowe.
+- Czasy części, słów, napisów i `duration_ms` są na osi dekodera: przy zapisie przechodzą przez `to_decoded` ze
+  szwami końcowego MP3 (`splice_times`), jak w AniShift `application/tts_clips.py`. Na osi serwera napisy
+  spóźniały się o 26,12 ms na każdy szew, czyli o sekundy w godzinnych nagraniach. Próba na żywo (`lektor_pl.txt`,
+  5 szwów): `duration_ms` 246 047,3 ms, tyle samo co po dekodowaniu FFmpegiem; oś serwera dawała 246 178,0 ms.
 - Usunięte: `src/downloader.py`, `src/auto.py`, `src/timestamps.py`, `src/clips.py`, `script.js`, `docs/report.md`,
   `docs/research/capabilities.md`. Dodane: notatki research, `LICENSE` (MIT), szablony issue i PR, CI.
 
@@ -41,8 +45,8 @@ completed: 2026-11-03
 uv run ruff check .            All checks passed
 uv run ruff format --check .   121 files already formatted
 uv run mypy .                  no issues in 110 source files
-uv run pytest -n 6             1048 passed
-node --test userscript/        76 passed, 0 failed
+uv run pytest -n 6             1049 passed
+node --test userscript/        79 passed, 0 failed
 prek run --all-files           passed
 uvx --from <wheel> edp voices  exit 0 (instalacja z wheela w czystym środowisku)
 ```

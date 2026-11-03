@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Final
 from edp.engine.service import part_bounds, stream_timeline
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from edp.engine.types import AlignmentChunk, PartTiming
 
 __all__ = [
@@ -17,7 +19,7 @@ __all__ = [
     "Sentence",
     "Word",
     "json_text",
-    "shifted",
+    "retimed",
     "split_sentences",
     "split_words",
     "spoken_pieces",
@@ -85,10 +87,10 @@ def spoken_pieces(chunks: tuple[AlignmentChunk, ...], timings: tuple[PartTiming,
     }
 
 
-def shifted(piece: Piece, shift_ms: float) -> Piece:
-    """Return *piece* moved by *shift_ms* on the timeline."""
+def retimed(piece: Piece, time: Callable[[float], float]) -> Piece:
+    """Return *piece* with every character start and end passed through *time*."""
     text, starts, ends = piece
-    return text, [start + shift_ms for start in starts], [end + shift_ms for end in ends]
+    return text, [time(start) for start in starts], [time(end) for end in ends]
 
 
 def split_words(piece: Piece) -> list[Word | None]:
@@ -154,7 +156,7 @@ def json_text(  # noqa: PLR0913 - the file schema has these independent fields
     Args:
         audio: File name of the MP3 next to it.
         voice: Voice alias, or None when the account voice read the document.
-        duration_ms: Length of the MP3 on the server timeline.
+        duration_ms: Length of the MP3 as a decoder plays it.
         lines: Source text of every part, in order.
         timings: Timing of every part on the MP3 timeline, in the order of *lines*.
         pieces: Spoken characters on the MP3 timeline, in order.

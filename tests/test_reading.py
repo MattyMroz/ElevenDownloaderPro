@@ -14,7 +14,7 @@ from edp import reading
 from edp.engine import service
 from edp.errors import OutputError, TtsAuthError, TtsInputError, TtsTimeoutError
 from edp.reading import read_id_from_url, record, text_lines
-from edp.utils.mp3_frames import frames_duration_ms, iter_frames
+from edp.utils.mp3_frames import frames_duration_ms, iter_frames, splice_times
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -289,6 +289,23 @@ def test_record_reread_parts_are_joined_in_text_order_with_their_own_times(
     assert [word["text"] for word in words] == list(LINES)
     assert [word["start_ms"] for word in words] == pytest.approx([part.start_ms for part in result.parts])
     assert [word["end_ms"] for word in words] == pytest.approx([part.end_ms for part in result.parts])
+
+
+def test_record_times_follow_the_decoder_that_skips_every_splice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use(monkeypatch, ScriptedEngine(tmp_path, splices=True))
+
+    result = record(_text(tmp_path, *LINES), home=tmp_path)
+
+    data = result.mp3.read_bytes()
+    assert len(splice_times(data)) == len(LINES) - 1
+    starts = _frame_starts(data)
+    assert [part.start_ms for part in result.parts] == pytest.approx([starts[1], starts[2], starts[3], starts[4]])
+    assert result.duration_ms == pytest.approx(sum(frame.duration_ms for frame in iter_frames(data)))
+    described = json.loads(result.json.read_text(encoding="utf-8"))
+    assert described["duration_ms"] == pytest.approx(result.duration_ms)
+    assert [word["start_ms"] for word in described["words"]] == pytest.approx([part.start_ms for part in result.parts])
 
 
 def test_record_keeps_audio_streamed_before_the_first_part(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

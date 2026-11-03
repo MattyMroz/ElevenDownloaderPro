@@ -189,12 +189,12 @@
         let expected = audioOffset(data);
         for (const frame of iterFrames(data)) {
             const dropped = parseFrameHeader(data, expected);
-            if (frame.offset !== expected && dropped !== null) yield [expected, dropped.durationMs];
-            yield [frame.offset, frame.durationMs];
+            if (frame.offset !== expected && dropped !== null) yield [expected, dropped.durationMs, true];
+            yield [frame.offset, frame.durationMs, false];
             expected = frame.offset + frame.size;
         }
         const trailing = parseFrameHeader(data, expected);
-        if (trailing !== null) yield [expected, trailing.durationMs];
+        if (trailing !== null) yield [expected, trailing.durationMs, false];
     }
 
     function framesDurationMs(data) {
@@ -208,6 +208,25 @@
             dropped += durationMs;
         }
         return [new Uint8Array(0), dropped];
+    }
+
+    function spliceTimes(data) {
+        let decodedMs = 0.0;
+        const splices = [];
+        for (const [, durationMs, dropped] of serverFrames(data)) {
+            if (dropped) splices.push(decodedMs);
+            else decodedMs += durationMs;
+        }
+        return splices;
+    }
+
+    function toDecoded(serverMs, splices, frameMs) {
+        let lost = 0;
+        for (const splice of splices) {
+            if (splice + lost * frameMs >= serverMs) break;
+            lost += 1;
+        }
+        return serverMs - lost * frameMs;
     }
 
     // ── Stream recorder (port of engine/recorder.py) ─────────────────────────
@@ -563,12 +582,38 @@
 
     // ── Result files ─────────────────────────────────────────────────────────
 
-    function resultFiles(name, { voice, durationMs, chunks, parts, tags }) {
+    function decodedTime(audio) {
+        const first = iterFrames(audio).next();
+        const frameMs = first.done ? 0.0 : first.value.durationMs;
+        const splices = spliceTimes(audio);
+        return (ms) => toDecoded(ms, splices, frameMs);
+    }
+
+    function retimed(span, time) {
+        return { ...span, starts: span.starts.map(time), ends: span.ends.map(time) };
+    }
+
+    function joinBytes(chunks) {
+        const joined = new Uint8Array(chunks.reduce((size, chunk) => size + chunk.length, 0));
+        let at = 0;
+        for (const chunk of chunks) {
+            joined.set(chunk, at);
+            at += chunk.length;
+        }
+        return joined;
+    }
+
+    function resultFiles(name, { voice, audio, chunks, parts, tags }) {
+        const decoded = decodedTime(audio);
         let entries = [];
         let spans;
-        if (parts === null) spans = [timeline(chunks)];
+        if (parts === null) spans = [retimed(timeline(chunks), decoded)];
         else {
-            const ranges = partRanges(chunks, parts, tags);
+            const ranges = partRanges(chunks, parts, tags).map((range) => ({
+                ...retimed(range, decoded),
+                start_ms: decoded(range.start_ms),
+                end_ms: decoded(range.end_ms),
+            }));
             entries = ranges.map((range, index) => ({
                 index,
                 text: parts[index],
@@ -581,7 +626,7 @@
         const json = {
             audio: `${name}.mp3`,
             voice,
-            duration_ms: durationMs,
+            duration_ms: decoded(framesDurationMs(audio)),
             parts: entries,
             words: spans.flatMap((span) => splitWords(span.text, span.starts, span.ends).filter((word) => word !== null)),
             silent: entries.filter((entry) => !entry.spoken).map((entry) => entry.index),
@@ -1017,7 +1062,8 @@
             const name = fileStem(job ? job.name : panel ? panel.name.value || doc.title : doc.title);
             const voice = job ? job.voice : (recording.voices.find((alias) => alias !== null) ?? null);
             const recorder = recording.recorder;
-            const result = { voice, durationMs: recorder.offsetMs, chunks: recorder.chunks, parts: job ? job.parts : null };
+            const audio = joinBytes(recorder.audio);
+            const result = { voice, audio, chunks: recorder.chunks, parts: job ? job.parts : null };
             let files;
             try {
                 files = resultFiles(name, { ...result, tags: job ? job.tags : false });
@@ -1025,7 +1071,7 @@
                 report("error", "part timings could not be matched; saving without parts", error);
                 files = resultFiles(name, { ...result, parts: null, tags: false });
             }
-            download(doc, `${name}.mp3`, new Blob(recorder.audio, { type: "audio/mpeg" }));
+            download(doc, `${name}.mp3`, new Blob([audio], { type: "audio/mpeg" }));
             download(doc, `${name}.json`, new Blob([JSON.stringify(files.json, null, 2) + "\n"], { type: "application/json" }));
             download(doc, `${name}.srt`, new Blob([files.srt], { type: "application/x-subrip" }));
             recording.saved = true;
@@ -1398,6 +1444,8 @@
             isV2Speed,
             framesDurationMs,
             cutBeforeMs,
+            spliceTimes,
+            toDecoded,
             pySum,
             pyRound,
             neutralize,

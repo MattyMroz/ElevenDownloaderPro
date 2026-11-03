@@ -21,6 +21,8 @@ function mp3Frames(count, fill = 0) {
     return Buffer.from(Array.from({ length: count }, () => frame).flat());
 }
 
+const BROKEN_FRAME = Buffer.from([...FRAME_HEADER, ...new Array(100).fill(0)]);
+
 function audioFrame(chars, { frames = 4, fill = 0, stepMs = 10.0, key = "alignment" } = {}) {
     const payload = { audio: mp3Frames(frames, fill).toString("base64") };
     if (chars) {
@@ -541,7 +543,7 @@ describe("subtitles", () => {
 
 describe("words and subtitles of known parts", () => {
     function files(chunks, parts) {
-        return edp.resultFiles("x", { voice: null, durationMs: 0, chunks, parts, tags: false });
+        return edp.resultFiles("x", { voice: null, audio: new Uint8Array(0), chunks, parts, tags: false });
     }
 
     test("separator paragraph never becomes a word or a subtitle", () => {
@@ -596,6 +598,36 @@ describe("words and subtitles of known parts", () => {
     });
 });
 
+describe("times as a decoder plays them", () => {
+    test("splice times are decoded times of broken frames", () => {
+        const data = Buffer.concat([mp3Frames(5), BROKEN_FRAME, mp3Frames(3), BROKEN_FRAME, mp3Frames(2)]);
+
+        assert.deepEqual(edp.spliceTimes(data), [edp.pySum(new Array(5).fill(FRAME_MS)), edp.pySum(new Array(8).fill(FRAME_MS))]);
+    });
+
+    test("time after a splice loses one frame, time before it stays", () => {
+        assert.equal(edp.toDecoded(30.0, [2 * FRAME_MS], FRAME_MS), 30.0);
+        assert.equal(edp.toDecoded(3 * FRAME_MS, [2 * FRAME_MS], FRAME_MS), 2 * FRAME_MS);
+    });
+
+    test("words, parts and duration skip the frame dropped at a splice", () => {
+        const audio = Buffer.concat([mp3Frames(2), BROKEN_FRAME, mp3Frames(2)]);
+        const chunks = [chunk(`Ab. ${BREAK} … ${BREAK} `), chunk('Cd. <break time="2s"/>', { offsetMs: 3 * FRAME_MS })];
+
+        const { json } = edp.resultFiles("x", { voice: null, audio, chunks, parts: ["Ab.", "Cd."], tags: false });
+
+        assert.equal(json.duration_ms, edp.pySum(new Array(4).fill(FRAME_MS)));
+        assert.deepEqual(
+            json.words.map((word) => [word.text, word.start_ms]),
+            [
+                ["Ab.", 0.0],
+                ["Cd.", 2 * FRAME_MS],
+            ],
+        );
+        assert.equal(json.parts[1].start_ms, 2 * FRAME_MS);
+    });
+});
+
 describe("fixtures from Python", () => {
     for (const [name, parts] of [
         ["open-document", null],
@@ -604,7 +636,7 @@ describe("fixtures from Python", () => {
         test(`${name} frames give the srt computed by Python`, () => {
             const { rec } = recordFixture(name);
 
-            const { srt } = edp.resultFiles(name, { voice: null, durationMs: rec.offsetMs, chunks: rec.chunks, parts, tags: false });
+            const { srt } = edp.resultFiles(name, { voice: null, audio: recorded(rec), chunks: rec.chunks, parts, tags: false });
 
             assert.equal(srt, readFixture(`${name}.srt`));
         });
@@ -615,7 +647,7 @@ describe("fixtures from Python", () => {
 
         const { json } = edp.resultFiles("open-document", {
             voice: null,
-            durationMs: rec.offsetMs,
+            audio: recorded(rec),
             chunks: rec.chunks,
             parts: null,
             tags: false,
@@ -632,7 +664,7 @@ describe("fixtures from Python", () => {
 
         const { json } = edp.resultFiles("pasted-text", {
             voice: "fronczewski",
-            durationMs: rec.offsetMs,
+            audio: recorded(rec),
             chunks: rec.chunks,
             parts,
             tags: false,

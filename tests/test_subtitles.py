@@ -22,13 +22,11 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 def _stream(name: str) -> tuple[tuple[AlignmentChunk, ...], float]:
     recorder = StreamRecorder(io.BytesIO())
-    duration_ms = 0.0
+    audio = b""
     for line in (FIXTURES / f"{name}.frames.jsonl").read_text(encoding="utf-8").splitlines():
-        audio = json.loads(line).get("audio")
-        if audio:
-            duration_ms += frames_duration_ms(base64.b64decode(audio))
+        audio += base64.b64decode(json.loads(line).get("audio") or "")
         recorder.on_frame(line)
-    return recorder.chunks, duration_ms
+    return recorder.chunks, frames_duration_ms(audio)
 
 
 def _texts(name: str, pieces: list[Piece], **fields: Any) -> tuple[str, object]:

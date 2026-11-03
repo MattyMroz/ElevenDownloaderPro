@@ -3,17 +3,19 @@
 A text file becomes parts (one per non-empty line), the parts become documents of at most ``MAX_DOCUMENT_CHARS``
 characters, and the engine records at most ``MAX_PARALLEL_DOCUMENTS`` documents at once. Parts the server did not
 speak are read again in smaller documents. The recordings are cut and joined by MP3 frames into one file, and the
-part, word and subtitle times are moved onto its timeline.
+part, word and subtitle times are moved onto its timeline as a decoder plays it.
 """
 
 from __future__ import annotations
 
 import asyncio
 import itertools
+import operator
 import os
 import shutil
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Never
 from urllib.parse import unquote, urlsplit
@@ -35,17 +37,18 @@ from edp.engine import (
 from edp.engine.api_backend import sign_in as sign_in_async
 from edp.engine.service import PART_GLUE, stream_timeline
 from edp.errors import ErrorCode, ErrorContext, OutputError, TransientError, TtsInputError
-from edp.subtitles import Piece, json_text, shifted, spoken_pieces, srt_text
+from edp.subtitles import Piece, json_text, retimed, spoken_pieces, srt_text
 from edp.utils._retry import build_retry
 from edp.utils.logger import get_logger
-from edp.utils.mp3_frames import cut_before_ms, frames_duration_ms
+from edp.utils.mp3_frames import cut_before_ms, frames_duration_ms, iter_frames, splice_times, to_decoded
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from tenacity import AsyncRetrying
 
     from edp.engine.types import DocumentResult, ElevenReaderVoice
+    from edp.utils.mp3_frames import FrameHeader
 
 __all__ = ["RecordResult", "default_home", "download", "read_id_from_url", "record", "sign_in", "text_lines"]
 
@@ -220,8 +223,9 @@ async def _download(read_id: str, out: Path, *, voice: str | None, home: Path) -
 def _write_download(out: Path, base: Path, voice_alias: str | None, result: DocumentResult) -> RecordResult:
     data: bytes = result.recording.read_bytes()
     described, subtitles = _sibling(base, _JSON), _sibling(base, _SRT)
-    pieces: list[Piece] = [stream_timeline(result.chunks)]
-    duration_ms: float = frames_duration_ms(data)
+    decoded: Callable[[float], float] = _decoded_time(data)
+    pieces: list[Piece] = [retimed(stream_timeline(result.chunks), decoded)]
+    duration_ms: float = decoded(frames_duration_ms(data))
     _write_atomic(out, data)
     _write_atomic(
         described,
@@ -377,13 +381,17 @@ def _write_record(
         timings.append(
             PartTiming(request_id=part.request_id, start_ms=timing.start_ms + shift_ms, end_ms=timing.end_ms + shift_ms)
         )
-        pieces.append(shifted(take.pieces[part.request_id], shift_ms))
+        pieces.append(retimed(take.pieces[part.request_id], partial(operator.add, shift_ms)))
         output += segment
         output_ms += length_ms
     data: bytes = bytes(output)
     mp3, described, subtitles = _sibling(base, _MP3), _sibling(base, _JSON), _sibling(base, _SRT)
-    duration_ms: float = frames_duration_ms(data)
-    final: tuple[PartTiming, ...] = tuple(timings)
+    decoded: Callable[[float], float] = _decoded_time(data)
+    duration_ms: float = decoded(frames_duration_ms(data))
+    final: tuple[PartTiming, ...] = tuple(
+        replace(timing, start_ms=decoded(timing.start_ms), end_ms=decoded(timing.end_ms)) for timing in timings
+    )
+    pieces = [retimed(piece, decoded) for piece in pieces]
     lines: tuple[str, ...] = tuple(part.text for part in parts)
     _write_atomic(mp3, data)
     _write_atomic(
@@ -422,6 +430,12 @@ def _stretch(take: _Take, request_id: str) -> tuple[bytes, float, float]:
     following: PartTiming = take.timings[take.spoken[order + 1]]
     tail, length_ms = cut_before_ms(rest, following.start_ms - cut_ms)
     return rest[: len(rest) - len(tail)], cut_ms, length_ms
+
+
+def _decoded_time(data: bytes) -> Callable[[float], float]:
+    """Return the map from the server timeline of *data* onto the one a decoder plays, one frame shorter per splice."""
+    first: FrameHeader | None = next(iter_frames(data), None)
+    return partial(to_decoded, splices=splice_times(data), frame_ms=0.0 if first is None else first.duration_ms)
 
 
 def _sibling(base: Path, suffix: str) -> Path:
