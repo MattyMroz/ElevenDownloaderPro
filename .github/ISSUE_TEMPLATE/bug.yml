@@ -7,8 +7,8 @@ body:
     id: version
     attributes:
       label: Version
-      description: EDP commit (`git rev-parse --short HEAD`) for the CLI, or the userscript `@version` from the Tampermonkey dashboard.
-      placeholder: "edp 1a2b3c4 / userscript 2.0.0"
+      description: ElevenDownloaderPro commit (`git rev-parse --short HEAD`) for the CLI, or the userscript `@version` from the Tampermonkey dashboard.
+      placeholder: "ElevenDownloaderPro 1a2b3c4 / userscript 2.0.1"
     validations:
       required: true
   - type: dropdown

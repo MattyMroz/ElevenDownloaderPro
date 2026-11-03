@@ -1,4 +1,4 @@
-"""EDP error hierarchy: retryable and permanent failures with structured context."""
+"""ElevenDownloaderPro error hierarchy: retryable and permanent failures with structured context."""
 
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ class ErrorContext:
 
 
 class EdpError(Exception):
-    """Base exception for all EDP errors."""
+    """Base exception for all ElevenDownloaderPro errors."""
 
     def __init__(
         self,

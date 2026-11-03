@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         EDP
+// @name         ElevenDownloaderPro
 // @namespace    https://github.com/MattyMroz/ElevenDownloaderPro
-// @version      2.0.0
+// @version      2.0.1
 // @description  Records the ElevenReader audio stream from its first frame and saves MP3, word timings (.json) and sentence subtitles (.srt); can also upload pasted text, record it and restore the account afterwards.
 // @author       Mateusz Mróz
 // @match        https://elevenreader.io/*
@@ -17,7 +17,7 @@
 
     // ── Constants ────────────────────────────────────────────────────────────
 
-    const VERSION = "2.0.0";
+    const VERSION = "2.0.1";
     const VOICES = Object.freeze([
         Object.freeze({ alias: "fronczewski", label: "Piotr Fronczewski", voice_id: "T5l58N8RNz5DKoClpKIJ" }),
         Object.freeze({ alias: "adam", label: "Adam", voice_id: "hIssydxXZ1WuDorjx6Ic" }),
@@ -1331,7 +1331,7 @@
             overflow: "hidden",
         });
         root.id = "edp-panel";
-        const header = element(doc, "div", { padding: "8px 10px", background: "#22222e", cursor: "move", fontWeight: "700" }, `EDP ${VERSION}`);
+        const header = element(doc, "div", { padding: "8px 10px", background: "#22222e", cursor: "move", fontWeight: "700" }, `ElevenDownloaderPro ${VERSION}`);
         const body = element(doc, "div", { padding: "10px", display: "grid", gap: "6px" });
         const status = element(doc, "div", { fontWeight: "600" });
         const stats = element(doc, "div", { color: "#a8a8c0" });

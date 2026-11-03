@@ -1,4 +1,4 @@
-# EDP: Eleven Downloader Pro
+# ElevenDownloaderPro
 
 Records ElevenReader speech (Eleven v4) to MP3, together with part timings, word timings (`.json`) and sentence
 subtitles (`.srt`). Two ways to use it:
@@ -35,7 +35,7 @@ edp download https://elevenreader.io/reader/library/<read_id> --out book.mp3
    "Allow User Scripts").
 2. Open [`userscript/edp.user.js`](https://raw.githubusercontent.com/MattyMroz/ElevenDownloaderPro/main/userscript/edp.user.js)
    and confirm the installation. Tampermonkey updates it from the same address.
-3. Open a document on [ElevenReader](https://elevenreader.io). The EDP panel records from the moment the stream opens
+3. Open a document on [ElevenReader](https://elevenreader.io). The ElevenDownloaderPro panel records from the moment the stream opens
    and saves `.mp3`, `.json` and `.srt` when the document ends; "Save recording now" saves earlier.
 4. To record your own text, paste it into the panel, pick a voice and press "Upload and record text". The document is
    deleted from your library afterwards and the account voice is restored.

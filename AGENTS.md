@@ -1,4 +1,4 @@
-# EDP (ElevenDownloaderPro)
+# ElevenDownloaderPro
 
 Nagrywanie mowy ElevenReadera (Eleven v4) do MP3 z czasami części, słów i napisami SRT: biblioteka i CLI `edp` w
 Pythonie (silnik przeniesiony z AniShift, steruje prawdziwym Chrome przez CDP) oraz userscript Tampermonkey o tym samym

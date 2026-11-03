@@ -1,4 +1,4 @@
-"""EDP: record ElevenReader speech as MP3 with part timings, word timings and subtitles."""
+"""ElevenDownloaderPro: record ElevenReader speech as MP3 with part timings, word timings and subtitles."""
 
 from __future__ import annotations
 

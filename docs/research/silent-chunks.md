@@ -2,7 +2,7 @@
 
 Notatka opisuje porcje strumienia, w których ElevenReader oddaje pełny tekst prawie bez dźwięku: objaw, wykrywanie i naprawę; stan na 2026-11-01.
 
-Źródła: nagrania `workspace/output/` (MS3_002–MS3_009, SS_3201-3225, SS_3201-3225_v2, testy `T*`, `P*`), dwa nagrania `MS3_009` (`bad_MS3_009/`, `run2_MS3_009/`), logi nagrań i kod dawnych skryptów EDP (commit `a55aecd`) oraz silnik `AniShift/anishift/services/tts/engines/elevenreader/` (commit `f595718`). Wszystkie liczby to pomiary, chyba że zaznaczono inaczej.
+Źródła: nagrania `workspace/output/` (MS3_002–MS3_009, SS_3201-3225, SS_3201-3225_v2, testy `T*`, `P*`), dwa nagrania `MS3_009` (`bad_MS3_009/`, `run2_MS3_009/`), logi nagrań i kod dawnych skryptów ElevenDownloaderPro (commit `a55aecd`) oraz silnik `AniShift/anishift/services/tts/engines/elevenreader/` (commit `f595718`). Wszystkie liczby to pomiary, chyba że zaznaczono inaczej.
 
 ## W skrócie
 
@@ -32,7 +32,7 @@ Ten sam ślad wcześniej, w `SS_3201-3225_v2` (wtedy niezauważony): porcje 133�
 
 ## 2. Gdzie powstaje
 
-Na serwerze. Dawny rejestrator EDP (`Recorder.write_chunk`) zapisywał bajty `audio` i `alignment` z ramki bez zmian. Deduplikacja i `trim_chunk` nie działały: w logu nie ma `skipped` ani `trimmed`. Długość porcji w pliku (835,9 ms) jest równa sumie ramek MP3 z samej ramki WebSocket, a więc serwer wysłał tyle dźwięku.
+Na serwerze. Dawny rejestrator ElevenDownloaderPro (`Recorder.write_chunk`) zapisywał bajty `audio` i `alignment` z ramki bez zmian. Deduplikacja i `trim_chunk` nie działały: w logu nie ma `skipped` ani `trimmed`. Długość porcji w pliku (835,9 ms) jest równa sumie ramek MP3 z samej ramki WebSocket, a więc serwer wysłał tyle dźwięku.
 
 Ślad „1 ms na znak” wygląda na zastępczy alignment, który serwer wstawia, gdy synteza porcji nie dała mowy. Przyczyny po stronie serwera nie znamy.
 
@@ -94,13 +94,13 @@ Sprawdzone na `MS3_009`:
 3. W nagraniu głównym wyciąć bajty cichej porcji. Granice wyznacza cięcie po ramkach od początku pliku dla `offset_ms` porcji i następnej, a w ich miejsce wstawić bajty z kroku 2. Format jest ten sam (MP3 128 kb/s, mono, 44,1 kHz), więc bez ponownego kodowania.
 4. Sprawdzić: długość = stara − 835,9 ms + nowa porcja; brak ciszy > 0,8 s w okolicy wklejki.
 
-Nie tnij po czasie z dekodera (`ffmpeg atrim`). Pliki nagrane dawnym downloaderem EDP mają uszkodzone ramki („Header missing”), dekoder je pomija i czas się przesuwa: w teście o 4,4 s.
+Nie tnij po czasie z dekodera (`ffmpeg atrim`). Pliki nagrane dawnym downloaderem ElevenDownloaderPro mają uszkodzone ramki („Header missing”), dekoder je pomija i czas się przesuwa: w teście o 4,4 s.
 
 Ponowne nagranie całego dokumentu nie pomaga: wynik jest ten sam (2/2). Zmiana tekstu („uduszę”) pomaga tylko w osobnym dokumencie; w pełnym rozdziale tego nie sprawdziliśmy.
 
 ## 7. AniShift
 
-`anishift/services/tts/engines/elevenreader/recorder.py` (commit `f595718`) ma tę samą logikę co dawny rejestrator EDP.
+`anishift/services/tts/engines/elevenreader/recorder.py` (commit `f595718`) ma tę samą logikę co dawny rejestrator ElevenDownloaderPro.
 
 - `service.py` sprawdza:
   - sumę znaków (`recorder.chars` vs `char_count`);
@@ -119,7 +119,7 @@ Ponowne nagranie całego dokumentu nie pomaga: wynik jest ten sam (2/2). Zmiana 
 - Co dokładnie wywołuje błąd (treść, kontekst, długość porcji)? Wymagałoby serii nagrań pełnego dokumentu z jedną zmianą naraz, po ok. 3 min każde.
 - Czy serwer kiedyś sygnalizuje to polem `notice`? W znanych przypadkach było `null`.
 
-## Stan w edp
+## Stan w ElevenDownloaderPro
 
 Reguła z punktu 5 (co najmniej 20 liter i mniej niż 10 ms dźwięku na literę) działa w dwóch miejscach:
 

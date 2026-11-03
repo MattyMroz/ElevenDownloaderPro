@@ -106,6 +106,6 @@ Każda para leży w `workspace/output/tag-test-clips/` jako `<znacznik>_z.mp3` (
 - Emocji, akcentu i jakości efektów nie da się zmierzyć liczbami; tam rozstrzyga ucho, a sędziowie się różnią.
 - Koszt testu: 17 038 znaków, około 1,7 kredytu.
 
-## Stan w edp
+## Stan w ElevenDownloaderPro
 
 Silnik `edp` domyślnie neutralizuje znaczniki v4: zamienia `[` na `(`, więc nawiasy kwadratowe nie działają jako znaczniki. Flaga `--tags` (`edp record PLIK.txt --voice ALIAS --tags`) przepuszcza je do serwera bez zmian. `<break` w części tekstu jest odrzucany zawsze, bo psuje granice części.

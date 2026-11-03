@@ -52,7 +52,7 @@ ElevenReader z AniShift, i przepisać userscript tak, żeby robił w przeglądar
 07. `auto.py` i `clips.py` usuwamy bez następców.
 08. `downloader.py` usuwamy; jego jedyna unikalna funkcja wraca jako `edp download <URL>` na kawałkach silnika.
 09. `timestamps.py` usuwamy; napisy SRT i czasy słów wracają jako `subtitles.py` nad czasami znaków silnika.
-10. Nazwa: EDP (pakiet `edp`, komenda `edp`).
+10. Nazwa: ElevenDownloaderPro (pakiet `edp`, komenda `edp`).
 11. Przenośną bibliotekę `anishift/utils` kopiujemy w całości 1:1 jako `src/edp/utils/`, z jej testami i zależnościami
     z `_portable.py` (`loguru`, `rich`, `pydantic`, `tenacity`).
 12. Format wyniku (JSON na stdout, kody wyjścia) jest opisany w `edp --help` i w `AGENTS.md`.
@@ -64,7 +64,7 @@ ElevenReader z AniShift, i przepisać userscript tak, żeby robił w przeglądar
 - Kod źródłowy silnika: **AniShift `origin/main` (54c43cb)**, czytany przez `git -C ../AniShift show origin/main:<ścieżka>`
   albo `git archive`. Lokalny `main` AniShift jest 13 commitów w tyle i nie ma wykrywania cichych porcji; z working
   tree AniShift nie kopiujemy nic.
-- Baseline EDP: `a55aecd`, bramki zielone (`ruff`, `ruff format`, `mypy` na 4 plikach). Testów nie ma.
+- Baseline ElevenDownloaderPro: `a55aecd`, bramki zielone (`ruff`, `ruff format`, `mypy` na 4 plikach). Testów nie ma.
 
 ## Stan aktualny
 
@@ -99,7 +99,7 @@ ElevenReader z AniShift, i przepisać userscript tak, żeby robił w przeglądar
 - Ponowne czytanie: `anishift/services/tts/service.py` — `_read_lines` :1084, `_read_document` :1110,
   `_group_documents` :1389, `_unspoken_line_error` :1662.
 - Kody wyjścia: `anishift/cli/exit_codes.py`.
-- Reguły słów i zdań: `src/timestamps.py` (`split_words`, `split_sentences`, `write_srt`, `write_json`) w EDP `a55aecd`.
+- Reguły słów i zdań: `src/timestamps.py` (`split_words`, `split_sentences`, `write_srt`, `write_json`) w ElevenDownloaderPro `a55aecd`.
 - Wzorce repo: `../AniShift/pyproject.toml` (`[tool.ruff]`, `[tool.mypy]`, `[tool.pytest.ini_options]` bez `-n auto`),
   `../AniShift/.github/` (szablony issue, PR, `workflows/ci.yml`).
 
@@ -284,7 +284,7 @@ Wspólne: `--home`. Kody wyjścia: 0 sukces; 1 odmowa (konfiguracja, logowanie, 
 
 ### Userscript
 
-- Nagłówek: `@name EDP`, `@version 2.0.0`, `@match https://elevenreader.io/*` (`elevenlabs.io` usuwamy, chyba że faza 6
+- Nagłówek: `@name ElevenDownloaderPro`, `@version 2.0.0`, `@match https://elevenreader.io/*` (`elevenlabs.io` usuwamy, chyba że faza 6
   pokaże tam strumień), `@run-at document-start`, `@grant none`, `@updateURL` i `@downloadURL` na
   `https://raw.githubusercontent.com/MattyMroz/ElevenDownloaderPro/main/userscript/edp.user.js`.
 - Hak na `WebSocket` ustawiony przy `document-start`, przed skryptami strony. Nagrywa **od otwarcia strumienia**
