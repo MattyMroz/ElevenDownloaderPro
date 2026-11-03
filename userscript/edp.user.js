@@ -15,7 +15,7 @@
 (function () {
     "use strict";
 
-    // ── Constants ────────────────────────────────────────────────────────────────
+    // ── Constants ────────────────────────────────────────────────────────────
 
     const VERSION = "2.0.0";
     const VOICES = Object.freeze([
@@ -63,7 +63,7 @@
     const CLOSING_MARKS = "\"'”’)]»";
     const DASHES = "-–—";
 
-    // ── Python semantics ─────────────────────────────────────────────────────────
+    // ── Python semantics ─────────────────────────────────────────────────────
 
     function pySum(values) {
         let total = 0;
@@ -127,7 +127,7 @@
         return [...text.matchAll(pattern)].map((match) => [before[match.index], before[match.index + match[0].length]]);
     }
 
-    // ── MP3 frames (port of utils/mp3_frames.py) ─────────────────────────────────
+    // ── MP3 frames (port of utils/mp3_frames.py) ─────────────────────────────
 
     const MPEG1_BITRATES_KBPS = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
     const MPEG2_BITRATES_KBPS = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160];
@@ -210,7 +210,7 @@
         return [new Uint8Array(0), dropped];
     }
 
-    // ── Stream recorder (port of engine/recorder.py) ─────────────────────────────
+    // ── Stream recorder (port of engine/recorder.py) ─────────────────────────
 
     function parseFrame(payload) {
         if (typeof payload !== "string") return { error: "binary stream frame ignored" };
@@ -417,7 +417,7 @@
         return isObject(data) && isNumber(data.position) ? data.position : null;
     }
 
-    // ── Document (port of engine/service.py) ─────────────────────────────────────
+    // ── Document (port of engine/service.py) ─────────────────────────────────
 
     function neutralize(text, tags) {
         return collapseSpaces(tags ? text : text.replaceAll("[", "(").replaceAll("]", ")"));
@@ -492,7 +492,7 @@
         return partRanges(chunks, parts, tags).map((range) => ({ start_ms: range.start_ms, end_ms: range.end_ms }));
     }
 
-    // ── Subtitles (same rules as src/edp/subtitles.py) ───────────────────────────
+    // ── Subtitles (same rules as src/edp/subtitles.py) ───────────────────────
 
     function splitWords(text, starts, ends) {
         const codePoints = Array.from(text);
@@ -561,7 +561,7 @@
             .join("\n");
     }
 
-    // ── Result files ─────────────────────────────────────────────────────────────
+    // ── Result files ─────────────────────────────────────────────────────────
 
     function resultFiles(name, { voice, durationMs, chunks, parts, tags }) {
         let entries = [];
@@ -612,7 +612,7 @@
         return stem || "edp";
     }
 
-    // ── Account (port of engine/api_backend.py) ──────────────────────────────────
+    // ── Account (port of engine/api_backend.py) ──────────────────────────────
 
     function accountSettings(config) {
         const voice = config.default_voice_id;
@@ -641,7 +641,7 @@
         return isNumber(value) ? String(value) : null;
     }
 
-    // ── Page hooks ───────────────────────────────────────────────────────────────
+    // ── Page hooks ───────────────────────────────────────────────────────────
 
     function installSocketHook(win, onStream, onError) {
         const NativeWebSocket = win.WebSocket;
@@ -781,7 +781,7 @@
         return nativeFetch.bind(win);
     }
 
-    // ── Browser app ──────────────────────────────────────────────────────────────
+    // ── Browser app ──────────────────────────────────────────────────────────
 
     function start(win) {
         const doc = win.document;
@@ -1260,7 +1260,7 @@
         setTimeout(() => URL.revokeObjectURL(url), 60000);
     }
 
-    // ── Panel ────────────────────────────────────────────────────────────────────
+    // ── Panel ────────────────────────────────────────────────────────────────
 
     function element(doc, tag, style, text) {
         const node = doc.createElement(tag);
@@ -1384,7 +1384,7 @@
         for (const node of [panel.save, panel.speedOne, panel.cleanUp, panel.record]) node.disabled = state.busy;
     }
 
-    // ── Entry ────────────────────────────────────────────────────────────────────
+    // ── Entry ────────────────────────────────────────────────────────────────
 
     if (typeof window === "object" && window !== null && window.document) start(window);
 
