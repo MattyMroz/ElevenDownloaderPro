@@ -1,8 +1,8 @@
 """Reject lines that carry a well-known API token shape.
 
 Each pattern starts at a word boundary, so a word that merely ends in sk never
-opens a key, and an OpenAI-style key must hold a digit, so long kebab-case CSS
-class names pass. Lines are matched as bytes, so the file encoding does not
+opens a key, and OpenAI-style and Hugging Face keys must hold a digit, so long
+kebab-case CSS class names and camelCase identifiers pass. Lines are matched as bytes, so the file encoding does not
 matter. The report names the token kind and line, never the value. Private
 keys are left to detect-private-key. Paths come from argv.
 """
@@ -21,6 +21,7 @@ TOKEN_KINDS: Final[dict[str, re.Pattern[bytes]]] = {
     "Google API key": re.compile(rb"\bAIza[0-9A-Za-z_-]{35}"),
     "Slack token": re.compile(rb"\bxox[abprs]-[A-Za-z0-9-]{10,}"),
     "Netlify token": re.compile(rb"\bnfp_[A-Za-z0-9]{20,}"),
+    "Hugging Face token": re.compile(rb"\bhf_(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{30,}\b"),
 }
 """Token kind by the pattern that matches its shape."""
 
