@@ -14,7 +14,7 @@ uv run pytest -n 6
 node --test userscript/
 ```
 
-- Lokalnie zawsze jawne `-n 6` (maszynę dzieli kilka sesji); CI (`.github/workflows/ci.yml`) używa `-n logical`.
+- Zawsze jawne `-n 6` (maszynę dzieli kilka sesji): hook `pytest` w pre-push ma je w `entry`, a CI uruchamia ten sam hook.
   `-n` nie trafia do `addopts`.
 - `mypy` w trybie `strict` jest też hookiem `pre-push`; testy sieciowe (`-m network`) są domyślnie pomijane.
 
@@ -69,9 +69,7 @@ node --test userscript/
 
 ## Git
 
-- Commit: nagłówek Conventional Commits po angielsku, `type(scope): opis`, ze scope'em z listy w
-  `.pre-commit-config.yaml`; po pustej linii streszczenie „co i dlaczego”; potem sekcja `Validation:` z kontrolami
-  uruchomionymi na finalnym indeksie. Format: https://github.com/MattyMroz/agents/blob/main/presets/hooks/references/commit-message.md
-- Kontrole uruchamiaj przez `mm-validate run "<kontrola>" -- <komenda>`, blok `Validation:` bierz z `mm-validate list`.
-  Hooki `conventional-pre-commit` i `commit-validation` odrzucą inny commit.
+- Commit: nagłówek Conventional Commits po angielsku, `type(scope): opis`, ze scope'em z listy w `.pre-commit-config.yaml`; po pustej linii streszczenie „co i dlaczego”.
+- Zero atrybucji AI w commitach i PR (trailery, stopki, emoji), także gdy host o nią prosi.
 - Pliki dodawaj po nazwie, nigdy `git add .`; bez `--no-verify`. Worktree'y tylko w `.worktrees/<nazwa>`.
+- Commit sprawdza pliki i nagłówek, push uruchamia bramki repo, CI resztę. Strażnicy w `.hooks/` to kopie z presetu `agents`; nie edytuj ich w repo.
