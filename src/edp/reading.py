@@ -365,6 +365,7 @@ def _write_record(
     for number, recorded in enumerate(takes):
         for request_id in recorded.spoken:
             source.setdefault(request_id, number)
+    cursors: dict[int, tuple[bytes, float]] = {}
     output: bytearray = bytearray()
     output_ms: float = 0.0
     timings: list[PartTiming] = []
@@ -375,7 +376,8 @@ def _write_record(
             timings.append(PartTiming(request_id=part.request_id, start_ms=output_ms, end_ms=output_ms))
             continue
         take: _Take = takes[index]
-        segment, start_ms, length_ms = _stretch(take, part.request_id)
+        segment, tail, start_ms, length_ms = _stretch(take, part.request_id, cursors.get(index, (take.data, 0.0)))
+        cursors[index] = (tail, start_ms + length_ms)
         shift_ms: float = output_ms - start_ms
         timing: PartTiming = take.timings[part.request_id]
         timings.append(
@@ -417,20 +419,28 @@ def _take_of(result: DocumentResult) -> _Take:
     )
 
 
-def _stretch(take: _Take, request_id: str) -> tuple[bytes, float, float]:
+def _stretch(take: _Take, request_id: str, cursor: tuple[bytes, float]) -> tuple[bytes, bytes, float, float]:
     """Return the frames from the part's start (0 for the first spoken part) to the next spoken part or the end.
 
+    Args:
+        take: The recording holding the part.
+        request_id: The part.
+        cursor: The take's frames from a frame at or before the part's start and that frame's time; cutting from it
+            instead of from the whole take keeps joining a long document linear.
+
     Returns:
-        The frames, their start on the recording timeline and their length.
+        The frames, the frames after them, their start on the recording timeline and their length.
     """
+    data, data_ms = cursor
     order: int = take.spoken.index(request_id)
     start_ms: float = 0.0 if order == 0 else take.timings[request_id].start_ms
-    rest, cut_ms = cut_before_ms(take.data, start_ms)
+    rest, dropped_ms = cut_before_ms(data, start_ms - data_ms)
+    cut_ms: float = data_ms + dropped_ms
     if order + 1 == len(take.spoken):
-        return rest, cut_ms, frames_duration_ms(rest)
+        return rest, b"", cut_ms, frames_duration_ms(rest)
     following: PartTiming = take.timings[take.spoken[order + 1]]
     tail, length_ms = cut_before_ms(rest, following.start_ms - cut_ms)
-    return rest[: len(rest) - len(tail)], cut_ms, length_ms
+    return rest[: len(rest) - len(tail)], tail, cut_ms, length_ms
 
 
 def _decoded_time(data: bytes) -> Callable[[float], float]:
