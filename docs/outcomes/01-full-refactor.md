@@ -1,18 +1,18 @@
 ---
 kind: outcome
-status: pending-human
+status: accepted
 baseline: a55aecd
 resulting-state: .inf
-completed: 2026-11-03
+completed: 2026-11-05
 ---
 
 # Outcome 01: pełny refaktor na silnik ElevenReader z AniShift
 
 ## Status
 
-- status: czeka na próbę Generała (userscript na żywej stronie, `edp download`) i na zgodę na zamknięcie zgłoszeń.
-- branch: `main` @ `388e835`, wypchnięty.
-- human acceptance: brak; scenariusz niżej.
+- status: zaakceptowany przez Generała 2026-11-05.
+- branch: `main`, wypchnięty.
+- human acceptance: userscript działa w Tampermonkey; rozdziały MS3_012–014 nagrane, odsłuchane i opublikowane.
 
 ## Finalny rezultat
 
@@ -20,7 +20,7 @@ completed: 2026-11-03
   wypisuje jeden JSON na stdout i kończy się stałym kodem wyjścia (0, 1, 2, 3, 4).
 - Silnik ElevenReader skopiowany z AniShift `origin/main` do `src/edp/engine/`, przenośna biblioteka `utils` 1:1 do
   `src/edp/utils/` (identyczna z `anishift/utils`, sprawdzone `diff -r`).
-- `reading.py`: podział tekstu na części i dokumenty, najwyżej 2 nagrania naraz, ponowne czytanie cichych części,
+- `reading.py`: jeden plik tekstowy to jeden dokument, najwyżej 2 nagrania naraz, ponowne czytanie cichych części,
   ponowienia błędów przejściowych, sklejanie MP3 po ramkach. `subtitles.py`: słowa i SRT.
 - Userscript `userscript/edp.user.js` z tym samym kontraktem: nagrywa od otwarcia strumienia, reguły rejestratora
   silnika, tryb „wklej tekst i nagraj”, te same trzy pliki wynikowe.
@@ -37,7 +37,8 @@ completed: 2026-11-03
   Play, a stary userscript i downloader startowały z wyłączonym nagrywaniem i je odrzucały. Naprawa: obie drogi
   nagrywają od otwarcia strumienia; regresję łapią testy w Pythonie i JS. `edp download` odmawia dokumentu, który strona
   wznawia od środka, a userscript ostrzega o tym w panelu.
-- **#2 (Tampermonkey nie działa).** Userscript przepisany od zera, ale przyczyny nie potwierdzono na żywej stronie.
+- **#2 (Tampermonkey nie działa).** Userscript przepisany od zera; Generał potwierdził, że działa w Tampermonkey.
+  Oba zgłoszenia zamknięte z odpowiedzią dla zgłaszających.
 
 ## Dowody automatyczne
 
@@ -55,9 +56,16 @@ uvx --from <wheel> edp voices  exit 0 (instalacja z wheela w czystym środowisku
 
 - `edp record test.txt --voice fronczewski` (3 akapity, 273 znaki): kod 0, 16,5 s audio, pierwsze słowo od 0 ms,
   5 zdań w `.srt`, `silent: []`; po nagraniu `session.json` bez zaległych dokumentów i z przywróconymi ustawieniami.
+
 - `edp record "rozdzial 1.5.txt"` na finalnym kodzie: kod 0, pliki `rozdzial 1.5.{mp3,json,srt}`, katalog roboczy
   usunięty, konto czyste.
+
 - Zalogowany profil skopiowany z `.chrome-profile/` do `~/.edp/chrome-profile/`; źródło zostało na miejscu.
+
+- `edp record` MS3_012, MS3_013 i MS3_014 (104 298, 97 227 i 105 619 znaków): każdy plik jednym dokumentem, dwa
+  naraz, kod 0, 0 cichych części, 0 błędów dekodera w MP3, `duration_ms` równe `ffprobe` co do milisekund. Jedyne
+  ciche miejsca dłuższe niż 1,6 s to 2,5–3 s przed liniami `*` i ok. 2 s na końcu. Pauzy 2,1 s ze szwu dokumentów
+  w starych nagraniach nie ma. Filmy #3.12–#3.14 zastąpiły na YouTube wersje z uciętą końcówką i pauzą.
 
 ## Review
 
@@ -78,24 +86,9 @@ uvx --from <wheel> edp voices  exit 0 (instalacja z wheela w czystym środowisku
 - Kopia silnika ma poza listą planu: wspólne `_stream` dla uploadu i downloadu, publiczne `part_bounds`,
   `stream_timeline`, `PART_GLUE` i `StreamRecorder.start_position`; `hub.py` bez zmian.
 
-## Do sprawdzenia przez Generała
-
-```text
-Userscript:
-  Zainstaluj https://raw.githubusercontent.com/MattyMroz/ElevenDownloaderPro/main/userscript/edp.user.js
-  (Tampermonkey, w Chrome włączone „Allow User Scripts”), otwórz dokument od początku i poczekaj do końca;
-  potem wklej krótki tekst w panelu i nagraj.
-  Oczekiwane: panel widoczny, licznik rośnie od otwarcia dokumentu, trzy pliki po końcu, początek słychać.
-  Jeśli nie działa (#2): konsola (wpisy [EDP], błędy CSP/Trusted Types), DevTools → Network → WS
-  (adres stream/v2, czy z workera), WebSocket.toString() w konsoli.
-edp download:
-  edp download https://elevenreader.io/reader/library/<read_id krótkiego dokumentu> --out probe.mp3
-  Oczekiwane: kod 0 i trzy pliki; dla dokumentu wznawianego od środka kod 2 z prośbą o przewinięcie.
-Odsłuch: pauzy między akapitami i szwy po sklejaniu (dłuższy tekst z kilkoma dokumentami).
-```
-
 ## Znane ograniczenia
 
+- `edp download` niesprawdzone na żywo.
 - Górnej granicy długości dokumentu nie zmierzono; 143 870 znaków w jednym dokumencie działa (MS3_010).
 - `--tags` niesprawdzone na żywo: jeśli serwer wytnie znaczniki z czasów znaków, części się nie dopasują.
 - Książki z katalogu (DRM) mogą iść innym strumieniem; niesprawdzone.
