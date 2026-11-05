@@ -582,6 +582,11 @@
 
     // ── Result files ─────────────────────────────────────────────────────────
 
+    function playableFrames(audio) {
+        const whole = Array.from(iterFrames(audio)).filter((frame) => frame.offset + frame.size <= audio.length);
+        return joinBytes(whole.map((frame) => audio.subarray(frame.offset, frame.offset + frame.size)));
+    }
+
     function decodedTime(audio) {
         const first = iterFrames(audio).next();
         const frameMs = first.done ? 0.0 : first.value.durationMs;
@@ -1071,7 +1076,7 @@
                 report("error", "part timings could not be matched; saving without parts", error);
                 files = resultFiles(name, { ...result, parts: null, tags: false });
             }
-            download(doc, `${name}.mp3`, new Blob([audio], { type: "audio/mpeg" }));
+            download(doc, `${name}.mp3`, new Blob([playableFrames(audio)], { type: "audio/mpeg" }));
             download(doc, `${name}.json`, new Blob([JSON.stringify(files.json, null, 2) + "\n"], { type: "application/json" }));
             download(doc, `${name}.srt`, new Blob([files.srt], { type: "application/x-subrip" }));
             recording.saved = true;
@@ -1445,6 +1450,7 @@
             framesDurationMs,
             cutBeforeMs,
             spliceTimes,
+            playableFrames,
             toDecoded,
             pySum,
             pyRound,

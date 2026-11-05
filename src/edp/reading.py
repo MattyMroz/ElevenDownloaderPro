@@ -225,8 +225,9 @@ def _write_download(out: Path, base: Path, voice_alias: str | None, result: Docu
     described, subtitles = _sibling(base, _JSON), _sibling(base, _SRT)
     decoded: Callable[[float], float] = _decoded_time(data)
     pieces: list[Piece] = [retimed(stream_timeline(result.chunks), decoded)]
-    duration_ms: float = decoded(frames_duration_ms(data))
-    _write_atomic(out, data)
+    playable: bytes = _playable(data)
+    duration_ms: float = frames_duration_ms(playable)
+    _write_atomic(out, playable)
     _write_atomic(
         described,
         json_text(audio=out.name, voice=voice_alias, duration_ms=duration_ms, lines=(), timings=(), pieces=pieces),
@@ -387,13 +388,14 @@ def _write_record(
     data: bytes = bytes(output)
     mp3, described, subtitles = _sibling(base, _MP3), _sibling(base, _JSON), _sibling(base, _SRT)
     decoded: Callable[[float], float] = _decoded_time(data)
-    duration_ms: float = decoded(frames_duration_ms(data))
+    playable: bytes = _playable(data)
+    duration_ms: float = frames_duration_ms(playable)
     final: tuple[PartTiming, ...] = tuple(
         replace(timing, start_ms=decoded(timing.start_ms), end_ms=decoded(timing.end_ms)) for timing in timings
     )
     pieces = [retimed(piece, decoded) for piece in pieces]
     lines: tuple[str, ...] = tuple(part.text for part in parts)
-    _write_atomic(mp3, data)
+    _write_atomic(mp3, playable)
     _write_atomic(
         described,
         json_text(
@@ -436,6 +438,15 @@ def _decoded_time(data: bytes) -> Callable[[float], float]:
     """Return the map from the server timeline of *data* onto the one a decoder plays, one frame shorter per splice."""
     first: FrameHeader | None = next(iter_frames(data), None)
     return partial(to_decoded, splices=splice_times(data), frame_ms=0.0 if first is None else first.duration_ms)
+
+
+def _playable(data: bytes) -> bytes:
+    """Return only the whole frames a decoder plays, so no broken frame at a splice or the end counts as time."""
+    return b"".join(
+        data[frame.offset : frame.offset + frame.size]
+        for frame in iter_frames(data)
+        if frame.offset + frame.size <= len(data)
+    )
 
 
 def _sibling(base: Path, suffix: str) -> Path:

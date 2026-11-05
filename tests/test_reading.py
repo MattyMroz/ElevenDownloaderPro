@@ -291,7 +291,7 @@ def test_record_reread_parts_are_joined_in_text_order_with_their_own_times(
     assert [word["end_ms"] for word in words] == pytest.approx([part.end_ms for part in result.parts])
 
 
-def test_record_times_follow_the_decoder_that_skips_every_splice(
+def test_record_drops_the_broken_frame_at_every_splice_and_times_what_is_left(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _use(monkeypatch, ScriptedEngine(tmp_path, splices=True))
@@ -299,10 +299,11 @@ def test_record_times_follow_the_decoder_that_skips_every_splice(
     result = record(_text(tmp_path, *LINES), home=tmp_path)
 
     data = result.mp3.read_bytes()
-    assert len(splice_times(data)) == len(LINES) - 1
+    assert splice_times(data) == ()
+    assert len(data) == sum(frame.size for frame in iter_frames(data))
     starts = _frame_starts(data)
     assert [part.start_ms for part in result.parts] == pytest.approx([starts[1], starts[2], starts[3], starts[4]])
-    assert result.duration_ms == pytest.approx(sum(frame.duration_ms for frame in iter_frames(data)))
+    assert result.duration_ms == pytest.approx(frames_duration_ms(data))
     described = json.loads(result.json.read_text(encoding="utf-8"))
     assert described["duration_ms"] == pytest.approx(result.duration_ms)
     assert [word["start_ms"] for word in described["words"]] == pytest.approx([part.start_ms for part in result.parts])

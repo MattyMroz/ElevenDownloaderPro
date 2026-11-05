@@ -599,6 +599,15 @@ describe("words and subtitles of known parts", () => {
 });
 
 describe("times as a decoder plays them", () => {
+    test("saved audio keeps every valid frame and drops the broken frame at a splice", () => {
+        const data = Buffer.concat([mp3Frames(5), BROKEN_FRAME, mp3Frames(3), BROKEN_FRAME]);
+
+        const playable = edp.playableFrames(data);
+
+        assert.deepEqual(Buffer.from(playable), mp3Frames(8));
+        assert.deepEqual(edp.spliceTimes(playable), []);
+    });
+
     test("splice times are decoded times of broken frames", () => {
         const data = Buffer.concat([mp3Frames(5), BROKEN_FRAME, mp3Frames(3), BROKEN_FRAME, mp3Frames(2)]);
 

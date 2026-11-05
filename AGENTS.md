@@ -55,7 +55,9 @@ node --test userscript/
 - Ten sam tekst z tym samym głosem serwer oddaje z cache jako identyczne MP3; nowe ujęcie wymaga zmienionego tekstu.
 - Silnik, `PartTiming` i sklejanie liczą czas na osi serwera, a dekoder pomija jedną ramkę na każdym szwie strumienia
   (`mp3_frames.splice_times`). Czasy i `duration_ms` w `.json` oraz `.srt` przechodzą przez `to_decoded` dopiero przy
-  zapisie wyników (`reading._decoded_time`, w userscripcie `decodedTime`).
+  zapisie wyników (`reading._decoded_time`, w userscripcie `decodedTime`). Do pliku MP3 trafiają tylko poprawne ramki
+  (`reading._playable`, `playableFrames`): uszkodzona ramka na szwie dekoder pomija, ale FFmpeg (`-t`, `time=`,
+  ffprobe) liczy ją jako czas, więc w pliku rozjeżdżałaby długość z `duration_ms`.
 - Twarde zabicie `edp` zostawia Chrome na profilu; Ctrl+C idzie przez anulowanie i łagodne zamknięcie (kod 4).
 - `edp download` odmawia (kod 2) dokumentu, który strona wznawia od środka (`position` > 0 w pierwszej wysłanej
   ramce); przewinięcia na początek przed Play nie znamy.
