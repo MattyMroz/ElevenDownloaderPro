@@ -23,7 +23,6 @@ __all__ = [
     "LIBRARY_LOAD_S",
     "LIBRARY_URL",
     "LINE_SEPARATOR",
-    "MAX_DOCUMENT_CHARS",
     "MAX_PARALLEL_DOCUMENTS",
     "MIN_DEDUP_BYTES",
     "MIN_PROBE_CHARS",
@@ -65,9 +64,6 @@ VOICES: Final[MappingProxyType[str, ElevenReaderVoice]] = MappingProxyType(
 
 DEFAULT_VOICE_ALIAS: Final[str] = "fronczewski"
 """Alias of the voice selected when the settings name none."""
-
-MAX_DOCUMENT_CHARS: Final[int] = 50_000
-"""Largest document text uploaded in one attempt."""
 
 MAX_PARALLEL_DOCUMENTS: Final[int] = 2
 """Most documents recorded at once in tabs of the one Chrome; a third stream on the device closes an older one."""

@@ -35,8 +35,10 @@ node --test userscript/
   stderr, kody wyjścia 0 sukces, 1 odmowa, 2 użycie, 3 niekompletne, 4 anulowano (opis w `edp --help`).
 - `src/edp/__init__.py`: publiczne API (`record`, `download`, `sign_in`, `read_session`, `VOICES`, `default_home`,
   błędy).
-- `src/edp/reading.py`: tekst → części (niepuste linie) → dokumenty do `MAX_DOCUMENT_CHARS`, najwyżej 2 naraz,
-  ponowne czytanie cichych części, ponowienia błędów przejściowych, sklejanie MP3 po ramkach.
+- `src/edp/reading.py`: jeden plik tekstowy → jeden dokument (części to niepuste linie); kilka plików nagrywa jeden
+  silnik naraz, najwyżej `MAX_PARALLEL_DOCUMENTS` (2) dokumenty, bo konto ma 2 strumienie; ponowne czytanie cichych
+  części, ponowienia błędów przejściowych, sklejanie MP3 po ramkach. Tekstu nie dzielimy: szew dokumentów zostawia
+  w środku nagrania ok. 2 s ciszy z końca dokumentu.
 - `src/edp/subtitles.py`: czasy znaków → `words` i zdania `.srt`; przy znanych częściach tylko znaki wypowiedzianych
   części (zakresy z `engine.service.part_bounds`).
 - `src/edp/engine/`: jedna próba nagrania w karcie Chrome; ma własny `AGENTS.md`.

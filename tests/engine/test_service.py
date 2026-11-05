@@ -1099,7 +1099,6 @@ def test_last_engine_closing_stops_browser_and_host_thread(tmp_path: Path) -> No
     [
         ({"voice_id": ADAM_ID}, TtsInputError),
         ({"voice_id": "dallin"}, TtsVoiceError),
-        ({"parts": (DocumentPart(request_id="line-0", text="x" * 50_001),)}, TtsInputError),
     ],
 )
 def test_synthesize_document_invalid_request_is_refused_without_browser(

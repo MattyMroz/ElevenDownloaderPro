@@ -21,7 +21,6 @@ from .constants import (
     END_IDLE_S,
     END_SLACK_CHARS,
     LINE_SEPARATOR,
-    MAX_DOCUMENT_CHARS,
     PAGE_SPEED,
     PLAY_ATTEMPTS,
     POLL_S,
@@ -166,8 +165,6 @@ class ElevenReaderTtsEngine:
         voice: ElevenReaderVoice = resolve_voice(request.voice_id)
         if voice != self._config.voice:
             _raise_input("ElevenReader request voice differs from engine configuration")
-        if self.document_chars(request.parts) > MAX_DOCUMENT_CHARS:
-            _raise_input(f"ElevenReader document exceeds {MAX_DOCUMENT_CHARS} characters")
         for part in request.parts:
             self.validate_part(part)
         return voice

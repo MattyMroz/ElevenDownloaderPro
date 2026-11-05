@@ -1,9 +1,9 @@
-"""Text files and library documents to one MP3 with part timings, words and subtitles.
+"""Text files and library documents to one MP3 each with part timings, words and subtitles.
 
-A text file becomes parts (one per non-empty line), the parts become documents of at most ``MAX_DOCUMENT_CHARS``
-characters, and the engine records at most ``MAX_PARALLEL_DOCUMENTS`` documents at once. Parts the server did not
-speak are read again in smaller documents. The recordings are cut and joined by MP3 frames into one file, and the
-part, word and subtitle times are moved onto its timeline as a decoder plays it.
+A text file becomes one document of parts (one per non-empty line). One engine records all the text files at once,
+at most ``MAX_PARALLEL_DOCUMENTS`` documents at a time. Parts the server did not speak are read again in smaller
+documents. The recordings of a text are cut and joined by MP3 frames into one file, and the part, word and subtitle
+times are moved onto its timeline as a decoder plays it.
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ from urllib.parse import unquote, urlsplit
 from edp.cancellation import Cancellation
 from edp.engine import (
     DEFAULT_VOICE_ALIAS,
-    MAX_DOCUMENT_CHARS,
     MAX_PARALLEL_DOCUMENTS,
     VOICES,
     DocumentPart,
@@ -35,7 +34,7 @@ from edp.engine import (
     resolve_voice,
 )
 from edp.engine.api_backend import sign_in as sign_in_async
-from edp.engine.service import PART_GLUE, stream_timeline
+from edp.engine.service import stream_timeline
 from edp.errors import ErrorCode, ErrorContext, OutputError, TransientError, TtsInputError
 from edp.subtitles import Piece, json_text, retimed, spoken_pieces, srt_text
 from edp.utils._retry import build_retry
@@ -43,7 +42,7 @@ from edp.utils.logger import get_logger
 from edp.utils.mp3_frames import cut_before_ms, frames_duration_ms, iter_frames, splice_times, to_decoded
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Iterator, Sequence
 
     from tenacity import AsyncRetrying
 
@@ -62,11 +61,8 @@ HOME_VARIABLE: Final[str] = "EDP_HOME"
 HOME_DIR_NAME: Final[str] = ".edp"
 """Home directory under the user's home when ``EDP_HOME`` is unset."""
 
-DOCUMENT_DEADLINE_S: Final[float] = 3600.0
-"""Upper limit of one document attempt; a full document plays in about 12 minutes at the measured speed."""
-
-DOWNLOAD_DEADLINE_S: Final[float] = 12 * 3600.0
-"""Upper limit of one download attempt; a library book can be many hours long."""
+DEADLINE_S: Final[float] = 12 * 3600.0
+"""Upper limit of one recording attempt; a book can be hours long, and a stalled stream fails sooner on its own."""
 
 RETRIES: Final[int] = 3
 """Repeats of a document after a transient failure."""
@@ -88,9 +84,6 @@ _JSON: Final[str] = ".json"
 
 _SRT: Final[str] = ".srt"
 """Suffix of the subtitles."""
-
-_NEWLINE: Final[str] = "\n"
-"""Line end closing every uploaded document."""
 
 _READER_PATH: Final[str] = "reader"
 """First path segment of document addresses; the read id is the last one."""
@@ -143,20 +136,28 @@ def read_id_from_url(url: str) -> str:
 
 
 def record(
-    text: Path,
-    *,
+    *texts: Path,
     voice: str = DEFAULT_VOICE_ALIAS,
     out_dir: Path | None = None,
     tags: bool = False,
     home: Path | None = None,
-) -> RecordResult:
-    """Record the text file and write ``<stem>.mp3``, ``<stem>.json`` and ``<stem>.srt`` next to it or in *out_dir*."""
-    try:
-        source: str = text.read_text(encoding="utf-8-sig")
-    except (OSError, UnicodeDecodeError) as error:
-        _raise_input_from(error, "The text file cannot be read as UTF-8", "Pass an existing UTF-8 .txt file.")
-    folder: Path = text.parent if out_dir is None else out_dir
-    return asyncio.run(_record(source, folder / text.stem, voice=voice, tags=tags, home=home or default_home()))
+    on_done: Callable[[Path, RecordResult], None] | None = None,
+) -> tuple[RecordResult, ...]:
+    """Record every text file as one document and write its ``<stem>.mp3``, ``.json`` and ``.srt``.
+
+    The files land next to each text or in *out_dir*, and *on_done* hears of every text as soon as its files are
+    written. All texts are checked before anything is recorded; the first failure stops the texts still recording,
+    while the files of finished texts stay.
+    """
+    sources: list[tuple[Path, str, Path]] = []
+    for text in texts:
+        try:
+            source: str = text.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError) as error:
+            _raise_input_from(error, text, "The text file cannot be read as UTF-8", "Pass an existing UTF-8 .txt file.")
+        folder: Path = text.parent if out_dir is None else out_dir
+        sources.append((text, source, folder / text.stem))
+    return asyncio.run(_record(sources, voice=voice, tags=tags, home=home or default_home(), on_done=on_done))
 
 
 def download(url: str, *, out: Path, voice: str | None = None, home: Path | None = None) -> RecordResult:
@@ -172,24 +173,55 @@ def sign_in(home: Path | None = None) -> SignInOutcome:
     return asyncio.run(sign_in_async(home or default_home()))
 
 
-async def _record(source: str, base: Path, *, voice: str, tags: bool, home: Path) -> RecordResult:
+async def _record(
+    sources: Sequence[tuple[Path, str, Path]],
+    *,
+    voice: str,
+    tags: bool,
+    home: Path,
+    on_done: Callable[[Path, RecordResult], None] | None,
+) -> tuple[RecordResult, ...]:
     chosen: ElevenReaderVoice = resolve_voice(voice)
     engine: ElevenReaderTtsEngine = ElevenReaderTtsEngine(ElevenReaderConfig(voice=chosen, profile_root=home))
-    work: Path | None = None
+    slots: asyncio.Semaphore = asyncio.Semaphore(MAX_PARALLEL_DOCUMENTS)
+    reader: Callable[[Path], _Reader] = partial(_Reader, engine, chosen.voice_id, tags=tags, slots=slots)
+
+    async def finish(text: Path, parts: tuple[DocumentPart, ...], base: Path) -> RecordResult:
+        result: RecordResult = await _record_text(reader, chosen.alias, parts, base)
+        if on_done is not None:
+            on_done(text, result)
+        return result
+
+    try:
+        texts: list[tuple[Path, tuple[DocumentPart, ...], Path]] = [
+            (text, _parts(text, source, engine), base) for text, source, base in sources
+        ]
+        try:
+            async with asyncio.TaskGroup() as group:
+                tasks: list[asyncio.Task[RecordResult]] = [
+                    group.create_task(finish(text, parts, base)) for text, parts, base in texts
+                ]
+        except ExceptionGroup as failure:
+            raise failure.exceptions[0] from None
+        return tuple(task.result() for task in tasks)
+    finally:
+        await engine.close()
+
+
+async def _record_text(
+    reader: Callable[[Path], _Reader], voice_alias: str, parts: tuple[DocumentPart, ...], base: Path
+) -> RecordResult:
+    work: Path = _workspace(base)
     kept: bool = False
     try:
-        parts: tuple[DocumentPart, ...] = _parts(source, engine)
-        work = _workspace(base)
-        reader: _Reader = _Reader(engine, chosen.voice_id, tags=tags, folder=work)
-        takes: list[DocumentResult] = await reader.read(_documents(parts, engine))
+        takes: list[DocumentResult] = await reader(work).read(parts)
         try:
-            return _write_record(base, chosen.alias, parts, takes)
+            return _write_record(base, voice_alias, parts, takes)
         except OSError as error:
             kept = True
             raise _output_error(error, kept=work) from error
     finally:
-        await engine.close()
-        if work is not None and not kept:
+        if not kept:
             shutil.rmtree(work, ignore_errors=True)
 
 
@@ -206,7 +238,7 @@ async def _download(read_id: str, out: Path, *, voice: str | None, home: Path) -
             read_id,
             work / f"download{_MP3}",
             voice_id=None if chosen is None else chosen.voice_id,
-            deadline_s=DOWNLOAD_DEADLINE_S,
+            deadline_s=DEADLINE_S,
             cancel=Cancellation(),
         )
         try:
@@ -238,30 +270,21 @@ def _write_download(out: Path, base: Path, voice_alias: str | None, result: Docu
 
 
 class _Reader:
-    """Records documents with one engine, at most ``MAX_PARALLEL_DOCUMENTS`` at once, repeating transient failures."""
+    """Records the documents of one text with an engine shared by all texts, taking one of *slots* per document."""
 
-    def __init__(self, engine: ElevenReaderTtsEngine, voice_id: str, *, tags: bool, folder: Path) -> None:
+    def __init__(
+        self, engine: ElevenReaderTtsEngine, voice_id: str, folder: Path, *, tags: bool, slots: asyncio.Semaphore
+    ) -> None:
         self._engine: ElevenReaderTtsEngine = engine
         self._voice_id: str = voice_id
         self._tags: bool = tags
         self._folder: Path = folder
         self._cancel: Cancellation = Cancellation()
-        self._slots: asyncio.Semaphore = asyncio.Semaphore(MAX_PARALLEL_DOCUMENTS)
+        self._slots: asyncio.Semaphore = slots
         self._numbers: Iterator[int] = itertools.count()
 
-    async def read(self, documents: list[tuple[DocumentPart, ...]]) -> list[DocumentResult]:
-        """Read every document with its rereads; return the recordings in document order, rereads after their own."""
-        try:
-            async with asyncio.TaskGroup() as group:
-                tasks: list[asyncio.Task[list[DocumentResult]]] = [
-                    group.create_task(self._read_again(parts)) for parts in documents
-                ]
-        except ExceptionGroup as failure:
-            raise failure.exceptions[0] from None
-        return [take for task in tasks for take in task.result()]
-
-    async def _read_again(self, parts: tuple[DocumentPart, ...]) -> list[DocumentResult]:
-        """Read *parts*, then the unspoken ones together, then each still unspoken one alone."""
+    async def read(self, parts: tuple[DocumentPart, ...]) -> list[DocumentResult]:
+        """Read *parts* as one document, then the unspoken ones together, then each still unspoken one alone."""
         takes: list[DocumentResult] = []
         read: tuple[DocumentPart, ...] = parts
         silent: tuple[DocumentPart, ...] = await self._take(read, takes)
@@ -292,7 +315,7 @@ class _Reader:
                 parts=parts,
                 voice_id=self._voice_id,
                 recording=self._folder / f"{number}.mp3",
-                deadline_s=DOCUMENT_DEADLINE_S,
+                deadline_s=DEADLINE_S,
                 tags=self._tags,
             )
             return await self._engine.synthesize_document(request, cancel=self._cancel)
@@ -315,46 +338,22 @@ def _numbered_lines(text: str) -> Iterator[tuple[int, str]]:
             yield number, stripped
 
 
-def _parts(source: str, engine: ElevenReaderTtsEngine) -> tuple[DocumentPart, ...]:
+def _parts(text: Path, source: str, engine: ElevenReaderTtsEngine) -> tuple[DocumentPart, ...]:
     parts: list[DocumentPart] = []
     for number, line in _numbered_lines(source):
         part: DocumentPart = DocumentPart(request_id=str(len(parts)), text=line)
         try:
             engine.validate_part(part)
         except TtsInputError as error:
-            _raise_line(number, error.context.message, error.context.suggestion, cause=error)
-        if engine.document_chars((part,)) > MAX_DOCUMENT_CHARS:
-            _raise_line(
-                number,
-                f"The line is longer than one ElevenReader document of {MAX_DOCUMENT_CHARS} characters",
-                "Split the line into shorter paragraphs.",
-            )
+            _raise_line(text, number, error.context.message, error.context.suggestion, cause=error)
         parts.append(part)
     if not parts:
-        _raise_input("The text file has no line to read", "Write the text to read, one paragraph per line.")
+        _raise_input(
+            "The text file has no line to read",
+            "Write the text to read, one paragraph per line.",
+            details={"text": str(text)},
+        )
     return tuple(parts)
-
-
-def _documents(parts: tuple[DocumentPart, ...], engine: ElevenReaderTtsEngine) -> list[tuple[DocumentPart, ...]]:
-    """Group *parts* in order into documents of at most ``MAX_DOCUMENT_CHARS`` characters.
-
-    A document is as long as its parts read alone, with the closing newline counted once, plus ``PART_GLUE``
-    between them, so the length grows by a running sum instead of measuring the whole document again.
-    """
-    documents: list[tuple[DocumentPart, ...]] = []
-    current: list[DocumentPart] = []
-    chars: int = 0
-    for part in parts:
-        alone: int = engine.document_chars((part,))
-        grown: int = chars - len(_NEWLINE) + len(PART_GLUE) + alone if current else alone
-        if current and grown > MAX_DOCUMENT_CHARS:
-            documents.append(tuple(current))
-            current, grown = [], alone
-        current.append(part)
-        chars = grown
-    documents.append(tuple(current))
-    logger.info("Text split into documents", parts=len(parts), documents=len(documents))
-    return documents
 
 
 def _write_record(
@@ -486,17 +485,25 @@ def _output_error(error: OSError, *, kept: Path | None) -> OutputError:
     return OutputError(context=context)
 
 
-def _raise_input(message: str, suggestion: str) -> Never:
-    raise TtsInputError(context=ErrorContext(code=ErrorCode.TTS_INPUT_INVALID, message=message, suggestion=suggestion))
+def _raise_input(message: str, suggestion: str, *, details: dict[str, object] | None = None) -> Never:
+    context: ErrorContext = ErrorContext(
+        code=ErrorCode.TTS_INPUT_INVALID, message=message, suggestion=suggestion, details=details or {}
+    )
+    raise TtsInputError(context=context)
 
 
-def _raise_input_from(error: Exception, message: str, suggestion: str) -> Never:
-    context: ErrorContext = ErrorContext(code=ErrorCode.TTS_INPUT_INVALID, message=message, suggestion=suggestion)
+def _raise_input_from(error: Exception, text: Path, message: str, suggestion: str) -> Never:
+    context: ErrorContext = ErrorContext(
+        code=ErrorCode.TTS_INPUT_INVALID, message=message, suggestion=suggestion, details={"text": str(text)}
+    )
     raise TtsInputError(context=context) from error
 
 
-def _raise_line(number: int, message: str, suggestion: str, *, cause: Exception | None = None) -> Never:
+def _raise_line(text: Path, number: int, message: str, suggestion: str, *, cause: Exception | None = None) -> Never:
     context: ErrorContext = ErrorContext(
-        code=ErrorCode.TTS_INPUT_INVALID, message=message, suggestion=suggestion, details={"line": number}
+        code=ErrorCode.TTS_INPUT_INVALID,
+        message=message,
+        suggestion=suggestion,
+        details={"text": str(text), "line": number},
     )
     raise TtsInputError(context=context) from cause

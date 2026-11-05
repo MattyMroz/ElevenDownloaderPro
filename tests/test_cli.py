@@ -11,7 +11,6 @@ from edp import cli, reading
 from edp.cli import EXIT_CANCELLED, EXIT_INCOMPLETE, EXIT_REFUSED, EXIT_SUCCESS, EXIT_USAGE, main
 from edp.engine.api_backend import save_cleanup, write_session
 from edp.engine.types import AccountCleanup, AccountSettings
-from edp.reading import RecordResult
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -133,19 +132,18 @@ def test_record_with_part_silent_after_rereads_exits_incomplete(
     assert value["results"][0]["silent"] == [1]
 
 
-def test_record_line_too_long_exits_with_usage_error_and_line_number(
+def test_record_unreadable_line_exits_with_usage_error_naming_text_and_line(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(reading, "ElevenReaderTtsEngine", lambda config: ScriptedEngine(tmp_path))
-    monkeypatch.setattr(reading, "MAX_DOCUMENT_CHARS", 5)
-    text = _text(tmp_path, "jeden", "Raz.", "Za długa linia.")
+    text = _text(tmp_path, "jeden", "Raz.", 'Dwa <break time="1s"/>.')
 
     value, code = _run(capsys, "record", str(text), "--home", str(tmp_path))
 
     assert code == EXIT_USAGE
     assert isinstance(value, dict)
     assert value["results"] == []
-    assert value["error"]["details"] == {"line": 2}
+    assert value["error"]["details"] == {"text": str(text), "line": 2}
 
 
 def test_download_other_address_exits_with_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
@@ -228,16 +226,9 @@ def test_unexpected_exception_exits_refused_with_json_and_logged_traceback(
 def test_ctrl_c_during_second_text_keeps_results_of_the_first(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(reading, "ElevenReaderTtsEngine", lambda config: ScriptedEngine(tmp_path))
-    texts = iter([None, KeyboardInterrupt()])
-
-    def interrupt_second(*args: object, **kwargs: object) -> RecordResult:
-        stop = next(texts)
-        if stop is not None:
-            raise stop
-        return reading.record(*args, **kwargs)  # type: ignore[arg-type]
-
-    monkeypatch.setattr(cli, "record", interrupt_second)
+    engine = ScriptedEngine(tmp_path)
+    engine.stops_at = {"Dwa.": KeyboardInterrupt()}
+    monkeypatch.setattr(reading, "ElevenReaderTtsEngine", lambda config: engine)
     first, second = _text(tmp_path, "jeden", "Raz."), _text(tmp_path, "dwa", "Dwa.")
 
     value, code = _run(capsys, "record", str(first), str(second), "--home", str(tmp_path))

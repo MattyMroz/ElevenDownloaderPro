@@ -522,6 +522,9 @@ def _no_browser(profile_root: Path) -> ChromeSession:
     raise AssertionError(message)
 
 
+_pause = asyncio.sleep
+
+
 class ScriptedEngine(ElevenReaderTtsEngine):
     def __init__(
         self,
@@ -535,6 +538,9 @@ class ScriptedEngine(ElevenReaderTtsEngine):
         super().__init__(engine_config(root), browser_factory=_no_browser)
         self.lead_frames: int = lead_frames
         self.splices: bool = splices
+        self.stops_at: dict[str, BaseException] = {}
+        self.active: int = 0
+        self.peak: int = 0
         self.speaks_up_to: dict[str, int] = speaks_up_to or {}
         self.failures: list[Exception] = failures or []
         self.documents: list[tuple[str, ...]] = []
@@ -545,6 +551,18 @@ class ScriptedEngine(ElevenReaderTtsEngine):
         self.calls += 1
         if self.failures:
             raise self.failures.pop(0)
+        self.active += 1
+        self.peak = max(self.peak, self.active)
+        try:
+            for _ in range(10):
+                await _pause(0)
+        finally:
+            self.active -= 1
+        for part in request.parts:
+            if part.text in self.stops_at:
+                for _ in range(50):
+                    await _pause(0)
+                raise self.stops_at[part.text]
         number: int = len(self.documents)
         self.documents.append(tuple(part.request_id for part in request.parts))
         chunks: list[AlignmentChunk] = []

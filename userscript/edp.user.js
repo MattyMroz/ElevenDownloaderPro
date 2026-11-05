@@ -31,7 +31,6 @@
     const DOCUMENT_NAME = "edp.txt";
     const PAGE_SPEED = 64.0;
     const READING_SPEED = 1.0;
-    const MAX_DOCUMENT_CHARS = 50000;
     const LINE_SEPARATOR = "…";
     const PART_GLUE = `\n\n${LINE_SEPARATOR}\n\n`;
     const MIN_DEDUP_BYTES = 8 * 1024;
@@ -1102,9 +1101,6 @@
                 }
             });
             const uploaded = documentText(parts, tags);
-            if (Array.from(uploaded).length > MAX_DOCUMENT_CHARS) {
-                throw new Error(`the text exceeds ${MAX_DOCUMENT_CHARS} characters; split it into smaller pieces`);
-            }
             const voice = VOICES.find((candidate) => candidate.alias === voiceAlias);
             if (!state.token) throw new Error("no ElevenReader token seen yet; wait until the library has loaded");
             const importButton = findButton(doc, "Import");

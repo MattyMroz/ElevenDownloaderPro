@@ -88,7 +88,7 @@ def test_record_writes_mp3_json_and_srt_next_to_the_text(tmp_path: Path, monkeyp
     engine = ScriptedEngine(tmp_path)
     _use(monkeypatch, engine)
 
-    result = record(_text(tmp_path, *LINES), home=tmp_path)
+    (result,) = record(_text(tmp_path, *LINES), home=tmp_path)
 
     assert (result.mp3, result.json, result.srt) == (
         tmp_path / "rozdzial.mp3",
@@ -112,8 +112,8 @@ def test_record_dotted_text_name_keeps_every_dot_in_the_outputs(
 ) -> None:
     _use(monkeypatch, ScriptedEngine(tmp_path))
 
-    first = record(_text(tmp_path, *LINES, name="rozdzial 1.5"), home=tmp_path)
-    second = record(_text(tmp_path, *LINES, name="rozdzial 1.6"), home=tmp_path)
+    (first,) = record(_text(tmp_path, *LINES, name="rozdzial 1.5"), home=tmp_path)
+    (second,) = record(_text(tmp_path, *LINES, name="rozdzial 1.6"), home=tmp_path)
 
     assert (first.mp3.name, first.json.name, first.srt.name) == (
         "rozdzial 1.5.mp3",
@@ -171,36 +171,49 @@ def test_record_succeeding_leaves_no_working_folder(tmp_path: Path, monkeypatch:
 def test_record_out_dir_receives_the_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _use(monkeypatch, ScriptedEngine(tmp_path))
 
-    result = record(_text(tmp_path, *LINES), out_dir=tmp_path / "out", home=tmp_path)
+    (result,) = record(_text(tmp_path, *LINES), out_dir=tmp_path / "out", home=tmp_path)
 
     assert result.mp3 == tmp_path / "out" / "rozdzial.mp3"
     assert result.json.is_file()
     assert result.srt.is_file()
 
 
-def test_record_parts_group_into_documents_within_the_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_record_long_text_is_one_document(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     engine = ScriptedEngine(tmp_path)
     _use(monkeypatch, engine)
-    monkeypatch.setattr(reading, "MAX_DOCUMENT_CHARS", len("Trzy.\n\n…\n\nPięć.\n"))
+    lines = [f"Akapit {number}. " + "Ala ma kota. " * 100 for number in range(60)]
 
-    result = record(_text(tmp_path, *LINES), home=tmp_path)
+    (result,) = record(_text(tmp_path, *lines), home=tmp_path)
 
-    assert sorted(engine.documents) == [("0", "1"), ("2", "3")]
-    assert [part.request_id for part in result.parts] == ["0", "1", "2", "3"]
-    assert _fills(result.mp3.read_bytes()) == [1, 2, 11, 12]
+    assert sum(len(line) for line in lines) > 50_000
+    assert engine.documents == [tuple(str(number) for number in range(60))]
+    assert result.silent == ()
 
 
-def test_record_line_longer_than_a_document_raises_input_error_with_line_number(
+def test_record_texts_record_at_once_each_as_one_document(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    engine = ScriptedEngine(tmp_path)
+    _use(monkeypatch, engine)
+    texts = [_text(tmp_path, *LINES, name=f"rozdzial {number}") for number in range(3)]
+
+    results = record(*texts, home=tmp_path)
+
+    assert [result.mp3.name for result in results] == ["rozdzial 0.mp3", "rozdzial 1.mp3", "rozdzial 2.mp3"]
+    assert engine.documents == [("0", "1", "2", "3")] * 3
+    assert engine.peak == 2
+
+
+def test_record_unreadable_line_raises_input_error_naming_text_and_line(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     engine = ScriptedEngine(tmp_path)
     _use(monkeypatch, engine)
-    monkeypatch.setattr(reading, "MAX_DOCUMENT_CHARS", 10)
+    good = _text(tmp_path, *LINES, name="dobry")
+    bad = _text(tmp_path, "Raz.", 'Dwa <break time="1s"/>.', name="zly")
 
     with pytest.raises(TtsInputError) as error:
-        record(_text(tmp_path, "Raz.", "To jest za długa linia."), home=tmp_path)
+        record(good, bad, home=tmp_path)
 
-    assert error.value.context.details == {"line": 3}
+    assert error.value.context.details == {"text": str(bad), "line": 3}
     assert engine.documents == []
 
 
@@ -227,7 +240,7 @@ def test_record_parts_silent_in_large_document_are_spoken_after_reading_them_tog
     engine = ScriptedEngine(tmp_path, speaks_up_to={"Dwa.": 2, "Pięć.": 2})
     _use(monkeypatch, engine)
 
-    result = record(_text(tmp_path, *LINES), home=tmp_path)
+    (result,) = record(_text(tmp_path, *LINES), home=tmp_path)
 
     assert engine.documents == [("0", "1", "2", "3"), ("1", "3")]
     assert result.silent == ()
@@ -239,7 +252,7 @@ def test_record_parts_silent_with_other_parts_are_spoken_when_read_alone(
     engine = ScriptedEngine(tmp_path, speaks_up_to={"Dwa.": 1, "Pięć.": 1})
     _use(monkeypatch, engine)
 
-    result = record(_text(tmp_path, *LINES), home=tmp_path)
+    (result,) = record(_text(tmp_path, *LINES), home=tmp_path)
 
     assert engine.documents == [("0", "1", "2", "3"), ("1", "3"), ("1",), ("3",)]
     assert result.silent == ()
@@ -251,7 +264,7 @@ def test_record_part_silent_even_alone_stays_silent_after_bounded_rereads(
     engine = ScriptedEngine(tmp_path, speaks_up_to={"Dwa.": 0, "Pięć.": 1})
     _use(monkeypatch, engine)
 
-    result = record(_text(tmp_path, *LINES), home=tmp_path)
+    (result,) = record(_text(tmp_path, *LINES), home=tmp_path)
 
     assert engine.documents == [("0", "1", "2", "3"), ("1", "3"), ("1",), ("3",)]
     assert result.silent == (1,)
@@ -265,7 +278,7 @@ def test_record_every_part_silent_reads_each_alone_once(tmp_path: Path, monkeypa
     engine = ScriptedEngine(tmp_path, speaks_up_to={"Raz.": 0, "Dwa.": 0})
     _use(monkeypatch, engine)
 
-    result = record(_text(tmp_path, "Raz.", "Dwa."), home=tmp_path)
+    (result,) = record(_text(tmp_path, "Raz.", "Dwa."), home=tmp_path)
 
     assert engine.documents == [("0", "1"), ("0",), ("1",)]
     assert result.silent == (0, 1)
@@ -277,7 +290,7 @@ def test_record_reread_parts_are_joined_in_text_order_with_their_own_times(
 ) -> None:
     _use(monkeypatch, ScriptedEngine(tmp_path, speaks_up_to={"Dwa.": 2, "Pięć.": 2}))
 
-    result = record(_text(tmp_path, *LINES), home=tmp_path)
+    (result,) = record(_text(tmp_path, *LINES), home=tmp_path)
 
     data = result.mp3.read_bytes()
     assert _fills(data) == [1, 2, 11, 3, 4, 12]
@@ -296,7 +309,7 @@ def test_record_drops_the_broken_frame_at_every_splice_and_times_what_is_left(
 ) -> None:
     _use(monkeypatch, ScriptedEngine(tmp_path, splices=True))
 
-    result = record(_text(tmp_path, *LINES), home=tmp_path)
+    (result,) = record(_text(tmp_path, *LINES), home=tmp_path)
 
     data = result.mp3.read_bytes()
     assert splice_times(data) == ()
@@ -312,7 +325,7 @@ def test_record_drops_the_broken_frame_at_every_splice_and_times_what_is_left(
 def test_record_keeps_audio_streamed_before_the_first_part(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _use(monkeypatch, ScriptedEngine(tmp_path, lead_frames=3))
 
-    result = record(_text(tmp_path, *LINES), home=tmp_path)
+    (result,) = record(_text(tmp_path, *LINES), home=tmp_path)
 
     data = result.mp3.read_bytes()
     assert _fills(data) == [99, 1, 2, 3, 4]
@@ -326,7 +339,7 @@ def test_record_transient_failure_is_retried_after_a_pause(
     engine = ScriptedEngine(tmp_path, failures=[TtsTimeoutError("stalled")])
     _use(monkeypatch, engine)
 
-    result = record(_text(tmp_path, *LINES), home=tmp_path)
+    (result,) = record(_text(tmp_path, *LINES), home=tmp_path)
 
     assert engine.calls == 2
     assert sleeps == [60.0]
@@ -398,7 +411,7 @@ def test_record_chunk_streamed_before_play_is_in_mp3_and_words(tmp_path: Path, m
     site.frames = stream_frames(texts)
     monkeypatch.setattr(service, "headless_session", _fake_browser(site))
 
-    result = record(_text(tmp_path, *texts), home=tmp_path)
+    (result,) = record(_text(tmp_path, *texts), home=tmp_path)
 
     assert site.events.index("open_document") < site.events.index("press_play")
     assert _fills(result.mp3.read_bytes()) == [1, 2]

@@ -156,16 +156,22 @@ def _voices(arguments: argparse.Namespace) -> tuple[object, int]:
 
 
 def _record(arguments: argparse.Namespace) -> tuple[object, int]:
-    results: list[dict[str, object]] = []
-    for text in arguments.texts:
-        try:
-            result: RecordResult = record(
-                text, voice=arguments.voice, out_dir=arguments.out, tags=arguments.tags, home=arguments.home
-            )
-        except (KeyboardInterrupt, EdpError, OSError) as error:
-            failure, code = _outcome(error)
-            return {"results": results, **failure}, code
-        results.append({"text": str(text), **_result_value(result)})
+    done: list[dict[str, object]] = []
+    try:
+        recorded: tuple[RecordResult, ...] = record(
+            *arguments.texts,
+            voice=arguments.voice,
+            out_dir=arguments.out,
+            tags=arguments.tags,
+            home=arguments.home,
+            on_done=lambda text, result: done.append({"text": str(text), **_result_value(result)}),
+        )
+    except (KeyboardInterrupt, EdpError, OSError) as error:
+        failure, code = _outcome(error)
+        return {"results": done, **failure}, code
+    results: list[dict[str, object]] = [
+        {"text": str(text), **_result_value(result)} for text, result in zip(arguments.texts, recorded, strict=True)
+    ]
     silent: bool = any(entry["silent"] for entry in results)
     return {"results": results}, EXIT_INCOMPLETE if silent else EXIT_SUCCESS
 

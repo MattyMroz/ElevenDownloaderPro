@@ -71,7 +71,8 @@ uvx --from <wheel> edp voices  exit 0 (instalacja z wheela w czystym środowisku
 
 - Przerwy ponowień 60/120/240 s zamiast 60/120/300 s (`build_retry` liczy wykładniczo z limitem).
 - Zły tekst, za długa linia, zły adres, `--out` bez `.mp3` i dokument wznawiany od środka dają kod 2.
-- Kilka plików w `edp record` nagrywa się po kolei, każdy z własną przeglądarką.
+- Kilka plików w `edp record` nagrywa jeden silnik naraz, po 2; każdy plik to jeden dokument (podział na dokumenty
+  po 50 000 znaków usunięty: zostawiał ok. 2 s ciszy w środku rozdziału).
 - Userscript wgrywa tekst przez interfejs biblioteki (Import, Upload), bo pól formularza `reads/add/v2` nie ma w żadnym
   źródle.
 - Kopia silnika ma poza listą planu: wspólne `_stream` dla uploadu i downloadu, publiczne `part_bounds`,
@@ -95,7 +96,7 @@ Odsłuch: pauzy między akapitami i szwy po sklejaniu (dłuższy tekst z kilkoma
 
 ## Znane ograniczenia
 
-- `MAX_DOCUMENT_CHARS = 50 000` to założenie z AniShift, nie pomiar.
+- Górnej granicy długości dokumentu nie zmierzono; 143 870 znaków w jednym dokumencie działa (MS3_010).
 - `--tags` niesprawdzone na żywo: jeśli serwer wytnie znaczniki z czasów znaków, części się nie dopasują.
 - Książki z katalogu (DRM) mogą iść innym strumieniem; niesprawdzone.
 - Głos i tempo to ustawienia całego konta: `edp` i AniShift naraz na jednym koncie przeszkadzają sobie.

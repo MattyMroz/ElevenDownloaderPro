@@ -21,8 +21,8 @@ edp record chapter.txt --voice fronczewski        # writes chapter.mp3, chapter.
 edp download https://elevenreader.io/reader/library/<read_id> --out book.mp3
 ```
 
-- Every non-empty line of the text file is one part. Long texts are split into several documents, recorded at most two
-  at a time and joined into one MP3.
+- Every non-empty line of the text file is one part, and the whole file is read as one ElevenReader document into one
+  MP3. Several files are recorded at once, two at a time.
 - A part the server leaves silent is read again in a smaller document; a part that stays silent is listed under
   `silent` and the command exits with 3.
 - Square brackets are read as text; `--tags` sends them as Eleven v4 audio tags.
