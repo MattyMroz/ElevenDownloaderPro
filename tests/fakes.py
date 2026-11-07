@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, cast
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from edp.engine import ElevenReaderConfig, ElevenReaderTtsEngine, resolve_voice
-from edp.engine.api_backend import document_titles
+from edp.engine.api_backend import document_titles, refused_error
 from edp.engine.service import part_spans
 from edp.engine.types import (
     AlignmentChunk,
@@ -136,6 +136,7 @@ class FakeSite:
     frames: list[str] | None = None
     char_count: int | None = None
     send_audio: bool = True
+    refusal: str | None = None
     player_done: bool = False
     hang_on: str = ""
     hung: threading.Event = field(default_factory=threading.Event)
@@ -233,9 +234,14 @@ class FakePage:
         if read_id in self.site.reads:
             self.site.reads.remove(read_id)
 
+    def raise_if_refused(self) -> None:
+        if self.site.refusal is not None:
+            raise refused_error(self.site.refusal)
+
     async def open_document(self, read_id: str) -> None:
         assert read_id == (READ_ID if self.upload_index is None else read_id_of(self.upload_index))
         await self._step("open_document")
+        self.raise_if_refused()
 
     async def press_play(self) -> None:
         await self._step("press_play")

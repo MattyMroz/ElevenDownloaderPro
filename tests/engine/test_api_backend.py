@@ -5,6 +5,7 @@ import io
 import json
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, ClassVar, cast
 
 import pytest
@@ -832,6 +833,28 @@ def test_reader_page_open_document_without_play_times_out() -> None:
         asyncio.run(_reader(page).open_document(READ_ID))
 
     assert page.calls == [("GOTO", f"{LIBRARY_PAGE_URL}/{READ_ID}")]
+
+
+def test_reader_page_open_document_app_check_refusal_raises_auth_error_at_once() -> None:
+    page = FakePlaywrightPage(visible=())
+    reader = _reader(page)
+    page.emit("console", SimpleNamespace(text="Failed to initialize AppCheck: FirebaseError: AppCheck: 403 error."))
+
+    started = time.monotonic()
+    with pytest.raises(TtsAuthError, match="App Check"):
+        asyncio.run(reader.open_document(READ_ID))
+
+    assert time.monotonic() - started < 1.0
+
+
+def test_reader_page_console_without_app_check_error_keeps_the_page_usable() -> None:
+    page = FakePlaywrightPage(visible=("Play",))
+    reader = _reader(page)
+    page.emit("console", SimpleNamespace(text="audioStream::handleAudioContextStateChange running"))
+
+    asyncio.run(reader.open_document(READ_ID))
+
+    reader.raise_if_refused()
 
 
 def test_reader_page_close_tolerates_gone_browser_and_skips_closed_tab() -> None:

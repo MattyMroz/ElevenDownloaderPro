@@ -319,7 +319,7 @@ def test_synthesize_document_line_count_mismatch_raises_clip_error(tmp_path: Pat
         _run(_record(engine_for(site), _request(tmp_path)))
 
 
-def test_synthesize_document_without_audio_presses_play_three_times_then_times_out(
+def test_synthesize_document_without_audio_opens_the_document_again_then_times_out(
     tmp_path: Path, engine_for: EngineFor
 ) -> None:
     site = FakeSite(texts=TEXTS, send_audio=False)
@@ -328,8 +328,22 @@ def test_synthesize_document_without_audio_presses_play_three_times_then_times_o
         _run(_record(engine_for(site), _request(tmp_path)))
 
     assert site.plays == 3
+    assert site.events.count("open_document") == 3
     _assert_cleaned(site)
     assert site.pages[0].closed
+
+
+def test_synthesize_document_app_check_refusal_fails_at_once_without_play(
+    tmp_path: Path, engine_for: EngineFor
+) -> None:
+    site = FakeSite(texts=TEXTS, refusal="AppCheck: 403 error. Attempts allowed again after 01d:00m:00s")
+
+    with pytest.raises(TtsAuthError, match="App Check") as error:
+        _run(_record(engine_for(site), _request(tmp_path)))
+
+    assert error.value.context.details == {"console": site.refusal}
+    assert site.plays == 0
+    _assert_cleaned(site)
 
 
 def test_synthesize_document_stalled_stream_times_out(tmp_path: Path, engine_for: EngineFor) -> None:

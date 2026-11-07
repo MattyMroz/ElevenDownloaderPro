@@ -50,10 +50,11 @@ silnik. Zmiany względem AniShift ogranicza plan `docs/plans/01-full-refactor.md
 - `ChromeSession.close` najpierw prosi Chrome o wyjście przez CDP (`Browser.close`) i czeka do 10 s; `terminate`
   i `kill` są tylko zapasem. Chrome zapisuje ciasteczka na dysk z opóźnieniem do ok. 30 s, więc twarde zabicie
   zaraz po zalogowaniu gubi sesję (`signed_in: true` w `session.json`, a profil wylogowany).
-- Nagrywanie, sprzątanie i sprawdzanie sesji przez silnik działają tylko z `headless=True` (`headless_session`);
-  okno widać wyłącznie w `sign_in` (`edp login`). Skrypty diagnostyczne też nie otwierają okna.
+- Domyślna fabryka silnika (`headless_session`) startuje Chrome bez okna; `reading.py` podaje `browser_factory` z oknem
+  (`_window`), więc `edp record` i `edp download` nagrywają w widocznym Chrome. Testy podmieniają `reading._window`
+  (`tests/conftest.py`), żeby żaden test nie otworzył prawdziwej przeglądarki.
 - `ProcessLock` na `chrome.lock` wyklucza drugą przeglądarkę na profilu (drugi proces, okno logowania): zajęty →
-  `ChromeBusyError` (przejściowy); w `sign_in` → `SignInOutcome.BUSY`. W procesie Chrome profilu ma tylko gospodarz.
+  `ChromeBusyError` (trwały: od razu kończy nagranie zamiast ponawiać co minutę); w `sign_in` → `SignInOutcome.BUSY`. W procesie Chrome profilu ma tylko gospodarz.
   `restrict_directory` przy każdym starcie.
 - `ReaderPage` jest jedynym miejscem z selektorami i wywołaniami Playwright. Każdy błąd Playwright idzie przez
   `map_playwright_error` z `from None`, bo komunikat Playwright potrafi zawierać adres z `read_id`.
@@ -96,8 +97,11 @@ silnik. Zmiany względem AniShift ogranicza plan `docs/plans/01-full-refactor.md
   starszy, a ta karta stoi do `STALL_S`. Dlatego `MAX_PARALLEL_DOCUMENTS` = 2; podniesienie tylko po nowym pomiarze na
   żywym koncie. Otwarcie i zamknięcie strumienia logują `ElevenReader stream opened/closed` z liczbą odebranych
   znaków.
-- Brak retry w transporcie. Ponowne „Play” (do 3) i pętla dołączania do CDP to czynności jednej próby; ponowienia
-  całego dokumentu robi `reading.py`.
+- Brak retry w transporcie. Ponowne otwarcie dokumentu z Play (do 3, gdy przez `START_TIMEOUT_S` nie przyszedł
+  dźwięk) i pętla dołączania do CDP to czynności jednej próby; ponowienia całego dokumentu robi `reading.py`.
+- Gdy Firebase App Check odrzuci przeglądarkę, strona pisze w konsoli `AppCheck: 403` / `appCheck/…` i nie otwiera
+  strumienia, a odmowę zapamiętuje w profilu na dobę. `ReaderPage` łapie to z konsoli (`APP_CHECK_REFUSAL`) i
+  `raise_if_refused` od razu kończy próbę trwałym `TtsAuthError` (`refused_error`), bez czekania na Play.
 - Błąd Playwright przy starcie sterownika, dołączaniu i przygotowaniu kontekstu (`ChromeSession._attach`) staje się
   `unavailable_error`, więc `sign_in` kończy się `FAILED` zamiast wisieć.
 - Każde wywołanie strony w próbie (także `set_page_speed`, `press_play`, `check_page_speed`, `player_state`) idzie

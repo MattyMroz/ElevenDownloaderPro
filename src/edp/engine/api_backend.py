@@ -35,10 +35,12 @@ from .constants import (
     ACTION_TIMEOUT_S,
     ADD_ENDPOINT,
     API_HOST,
+    APP_CHECK_REFUSAL,
     CLEANUP_STEP_TIMEOUT_S,
     LIBRARY_LOAD_S,
     LIBRARY_URL,
     PLAYER_STATE_JS,
+    POLL_S,
     READING_SPEED,
     READS_URL,
     READY_TIMEOUT_S,
@@ -64,7 +66,7 @@ from .types import (
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
 
-    from playwright.async_api import APIResponse, Locator, Page, Request, Response, WebSocket
+    from playwright.async_api import APIResponse, ConsoleMessage, Locator, Page, Request, Response, WebSocket
     from playwright.async_api import Error as PlaywrightError
     from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
@@ -200,6 +202,20 @@ def auth_error(message: str, *, details: dict[str, object] | None = None) -> Tts
     return TtsAuthError(context=context)
 
 
+def refused_error(console: str) -> TtsAuthError:
+    """Return the permanent error for a browser the site's App Check refused; the page then blocks it for a day."""
+    context: ErrorContext = ErrorContext(
+        code=ErrorCode.TTS_AUTH_FAILED,
+        message="ElevenReader App Check refused this browser profile, so the page opens no audio stream",
+        suggestion=(
+            "Google's bot check refused this Chrome profile and the page blocks it for a day. Sign in on a new "
+            "profile, or record in your own Chrome."
+        ),
+        details={"console": console},
+    )
+    return TtsAuthError(context=context)
+
+
 def voice_error(message: str) -> TtsVoiceError:
     """Return the permanent error for a voice the account or stream did not take."""
     context: ErrorContext = ErrorContext(
@@ -266,8 +282,10 @@ class ReaderPage:
         self._page: Page = page
         self._token: str | None = None
         self._stream_listener: Callable[[WebSocket], None] | None = None
+        self._refusal: str | None = None
         page.set_default_timeout(ACTION_TIMEOUT_S * _MS_PER_S)
         page.on("request", self._remember_token)
+        page.on("console", self._watch_console)
 
     @property
     def token(self) -> str | None:
@@ -362,11 +380,27 @@ class ReaderPage:
             if response.status != _NOT_FOUND:
                 _require_ok(response, action=action)
 
+    def raise_if_refused(self) -> None:
+        """Raise TtsAuthError once the page reported that App Check refused this browser."""
+        if self._refusal is not None:
+            raise refused_error(self._refusal)
+
     async def open_document(self, read_id: str) -> None:
-        """Open one uploaded read and wait until its Play button appears."""
+        """Open one uploaded read and wait until its Play button appears, failing at once on an App Check refusal."""
         with _browser_action("open_document"):
             await self._page.goto(f"{LIBRARY_URL}/{read_id}")
-            await self._button("Play").wait_for(timeout=READY_TIMEOUT_S * _MS_PER_S)
+            play: Locator = self._button("Play")
+            waited_s: float = 0.0
+            while True:
+                self.raise_if_refused()
+                try:
+                    await play.wait_for(timeout=POLL_S * _MS_PER_S)
+                except _playwright_timeout():
+                    waited_s += POLL_S
+                    if waited_s >= READY_TIMEOUT_S:
+                        raise
+                else:
+                    return
 
     async def press_play(self) -> None:
         """Press Play when the player shows it."""
@@ -439,6 +473,11 @@ class ReaderPage:
             await self._page.close()
         except _playwright_error():
             logger.debug("ElevenReader tab was already closed")
+
+    def _watch_console(self, message: ConsoleMessage) -> None:
+        if self._refusal is None and re.search(APP_CHECK_REFUSAL, message.text):
+            self._refusal = message.text
+            logger.warning("ElevenReader App Check refused this browser", console=message.text)
 
     def _button(self, name: str) -> Locator:
         return self._page.get_by_role("button", name=name, exact=True).filter(visible=True)

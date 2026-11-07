@@ -10,14 +10,14 @@ from typing import TYPE_CHECKING, Final
 from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import async_playwright
 
-from edp.errors import ErrorCode, ErrorContext, TtsConfigError, TtsProviderUnavailableError
+from edp.errors import ErrorCode, ErrorContext, FatalError, TtsConfigError, TtsError
 from edp.private_dir import PrivateDirectoryError, restrict_directory
 from edp.process_lock import ProcessLock
 from edp.utils.logger import get_logger
 
 from .api_backend import ReaderPage, speed_script, unavailable_error
 from .config import find_chrome, profile_dir
-from .constants import CONNECT_ATTEMPTS, CONNECT_INTERVAL_S, PAGE_SPEED, UNAVAILABLE_RETRY_S
+from .constants import CONNECT_ATTEMPTS, CONNECT_INTERVAL_S, PAGE_SPEED
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -55,7 +55,7 @@ class ChromeMissingError(TtsConfigError):
     """Google Chrome is not installed in a standard location or on ``PATH``."""
 
 
-class ChromeBusyError(TtsProviderUnavailableError):
+class ChromeBusyError(TtsError, FatalError):
     """Another edp browser already holds the ElevenReader profile."""
 
 
@@ -90,7 +90,7 @@ class ChromeSession:
         if chrome is None:
             raise ChromeMissingError(context=_missing_chrome_context())
         if not self._lock.acquire():
-            raise ChromeBusyError(retry_after_s=UNAVAILABLE_RETRY_S, context=_busy_context())
+            raise ChromeBusyError(context=_busy_context())
         try:
             await self._launch(chrome)
         except BaseException:

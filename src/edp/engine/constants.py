@@ -11,6 +11,7 @@ __all__ = [
     "ACTION_TIMEOUT_S",
     "ADD_ENDPOINT",
     "API_HOST",
+    "APP_CHECK_REFUSAL",
     "CHROME_LOCATIONS",
     "CHROME_STEM",
     "CLEANUP_STEP_TIMEOUT_S",
@@ -123,7 +124,10 @@ START_TIMEOUT_S: Final[float] = 60.0
 """Wait for the first audio after pressing Play."""
 
 PLAY_ATTEMPTS: Final[int] = 3
-"""Presses of Play within one attempt before the missing audio counts as a timeout."""
+"""Openings of the document with Play within one attempt before the missing audio counts as a timeout."""
+
+APP_CHECK_REFUSAL: Final[str] = r"AppCheck: \d{3}|appCheck/"
+"""Console text of the page once Firebase App Check refused this browser; the page then sends no stream."""
 
 STALL_S: Final[float] = 300.0
 """Time without new audio before the end after which the attempt times out."""

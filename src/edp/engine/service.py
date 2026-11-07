@@ -254,9 +254,9 @@ class ElevenReaderTtsEngine:
                 await unless_cancelled(page.set_page_speed(PAGE_SPEED), cancel)
                 await unless_cancelled(page.press_play(), cancel)
                 played_at: float = time.monotonic()
-                await _stream_opened(recorder, stream_voices, played_at, cancel)
+                await _stream_opened(page, recorder, stream_voices, played_at, cancel)
                 attempt.started()
-                await self._record(page, recorder, char_count, progress, cancel, played_at=played_at)
+                await self._record(page, recorder, char_count, progress, cancel, read_id=read_id, played_at=played_at)
             finally:
                 page.unwatch_stream()
                 recorder.stop()
@@ -265,7 +265,7 @@ class ElevenReaderTtsEngine:
             raise voice_error(message)
         return recorder
 
-    async def _record(  # noqa: PLR0913 - one recording loop needs its tab, stream, length, progress and Play moment
+    async def _record(  # noqa: PLR0913 - one recording loop needs its tab, stream, length, progress, read and Play moment
         self,
         page: ReaderPage,
         recorder: StreamRecorder,
@@ -273,6 +273,7 @@ class ElevenReaderTtsEngine:
         progress: Callable[[int, int], Awaitable[None]] | None,
         cancel: Cancellation,
         *,
+        read_id: str,
         played_at: float,
     ) -> None:
         now: float = time.monotonic()
@@ -282,6 +283,7 @@ class ElevenReaderTtsEngine:
         plays: int = 1
         while True:
             await unless_cancelled(asyncio.sleep(POLL_S), cancel)
+            page.raise_if_refused()
             if recorder.write_error is not None:
                 raise _write_error(recorder.write_error)
             if char_count is None and recorder.start_position:
@@ -299,8 +301,11 @@ class ElevenReaderTtsEngine:
                 if plays >= PLAY_ATTEMPTS:
                     reason: str = "ElevenReader sent no audio after Play"
                     raise timeout_error(reason)
+                logger.warning("ElevenReader sent no audio; the document is opened again", attempt=plays + 1)
+                await unless_cancelled(page.open_document(read_id), cancel)
+                await unless_cancelled(page.set_page_speed(PAGE_SPEED), cancel)
                 await unless_cancelled(page.press_play(), cancel)
-                plays, played_at = plays + 1, now
+                plays, played_at = plays + 1, time.monotonic()
                 continue
             if recorder.audio_bytes != last_bytes:
                 last_bytes, last_progress = recorder.audio_bytes, now
@@ -457,9 +462,10 @@ def _reported_here(request: DocumentSynthesisRequest) -> DocumentSynthesisReques
 
 
 async def _stream_opened(
-    recorder: StreamRecorder, addresses: list[bool], played_at: float, cancel: Cancellation
+    page: ReaderPage, recorder: StreamRecorder, addresses: list[bool], played_at: float, cancel: Cancellation
 ) -> None:
     while not addresses and not recorder.audio_bytes and time.monotonic() - played_at < START_TIMEOUT_S:
+        page.raise_if_refused()
         await unless_cancelled(asyncio.sleep(POLL_S), cancel)
 
 

@@ -19,7 +19,7 @@ from edp.engine.browser import (
     _chrome_args,
     _stop_process,
 )
-from edp.errors import TtsProviderUnavailableError
+from edp.errors import FatalError, TtsProviderUnavailableError
 from edp.process_lock import ProcessLock
 
 pytestmark = pytest.mark.unit
@@ -319,7 +319,7 @@ def test_chrome_session_start_with_profile_locked_raises_busy(chrome: _Chrome) -
     finally:
         holder.release()
 
-    assert error.value.retry_after_s == 60.0
+    assert isinstance(error.value, FatalError)
     assert chrome.argv == []
 
 

@@ -219,6 +219,8 @@ AGENTS.md  .pre-commit-config.yaml  pyproject.toml  uv.lock  .gitignore  LICENSE
   pliku dokumentu, funkcji JS).
 - Bez `MAX_DOCUMENT_CHARS` i bez odmowy dokumentu dłuższego niż 50 000 znaków w `_validate`: jeden plik tekstowy to
   jeden dokument. Limit nie miał pomiaru, a stary downloader nagrał jednym dokumentem 143 870 znaków (MS3_010).
+- `browser.py`: `ChromeBusyError` jest trwały (`TtsError`, `FatalError`), a nie przejściowy jak w AniShift. Zajęty
+  profil w `edp` to drugi proces CLI albo zawieszony Chrome; ponowienia co minutę tylko ukrywały, że nic nie nagrywa.
 - `AGENTS.md` silnika: odwołania do `TtsService`, schedulera, doctora i panelu zastąpione `reading.py` i `cli.py`.
 
 ### Publiczne API (`edp/__init__.py`)
