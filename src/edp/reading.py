@@ -46,6 +46,7 @@ if TYPE_CHECKING:
 
     from tenacity import AsyncRetrying
 
+    from edp.engine.browser import ChromeSession
     from edp.engine.types import DocumentResult, ElevenReaderVoice
     from edp.utils.mp3_frames import FrameHeader
 
@@ -72,6 +73,9 @@ RETRY_BASE_S: Final[float] = 60.0
 
 RETRY_CAP_S: Final[float] = 300.0
 """Longest pause before repeating a document."""
+
+REREAD_PAUSE_MS: Final[float] = 400.0
+"""Pause kept after a part joined in from a re-read; the rest of that recording is lead-in and closing silence."""
 
 _READER_HOST: Final[str] = "elevenreader.io"
 """Host of document addresses."""
@@ -182,7 +186,7 @@ async def _record(
     on_done: Callable[[Path, RecordResult], None] | None,
 ) -> tuple[RecordResult, ...]:
     chosen: ElevenReaderVoice = resolve_voice(voice)
-    engine: ElevenReaderTtsEngine = ElevenReaderTtsEngine(ElevenReaderConfig(voice=chosen, profile_root=home))
+    engine: ElevenReaderTtsEngine = _engine(ElevenReaderConfig(voice=chosen, profile_root=home))
     slots: asyncio.Semaphore = asyncio.Semaphore(MAX_PARALLEL_DOCUMENTS)
     reader: Callable[[Path], _Reader] = partial(_Reader, engine, chosen.voice_id, tags=tags, slots=slots)
 
@@ -230,7 +234,7 @@ async def _download(read_id: str, out: Path, *, voice: str | None, home: Path) -
     config: ElevenReaderConfig = ElevenReaderConfig(voice=chosen or VOICES[DEFAULT_VOICE_ALIAS], profile_root=home)
     base: Path = out.with_name(out.name[: -len(_MP3)])
     work: Path = _workspace(base)
-    engine: ElevenReaderTtsEngine = ElevenReaderTtsEngine(config)
+    engine: ElevenReaderTtsEngine = _engine(config)
     kept: bool = False
     try:
         result: DocumentResult = await _retrying()(
@@ -376,7 +380,9 @@ def _write_record(
             timings.append(PartTiming(request_id=part.request_id, start_ms=output_ms, end_ms=output_ms))
             continue
         take: _Take = takes[index]
-        segment, tail, start_ms, length_ms = _stretch(take, part.request_id, cursors.get(index, (take.data, 0.0)))
+        segment, tail, start_ms, length_ms = _stretch(
+            take, part.request_id, cursors.get(index, (take.data, 0.0)), reread=index > 0
+        )
         cursors[index] = (tail, start_ms + length_ms)
         shift_ms: float = output_ms - start_ms
         timing: PartTiming = take.timings[part.request_id]
@@ -419,25 +425,35 @@ def _take_of(result: DocumentResult) -> _Take:
     )
 
 
-def _stretch(take: _Take, request_id: str, cursor: tuple[bytes, float]) -> tuple[bytes, bytes, float, float]:
-    """Return the frames from the part's start (0 for the first spoken part) to the next spoken part or the end.
+def _stretch(
+    take: _Take, request_id: str, cursor: tuple[bytes, float], *, reread: bool
+) -> tuple[bytes, bytes, float, float]:
+    """Return the frames from the part's start to the next spoken part or the end.
+
+    The first spoken part of the first take starts at 0, keeping the stream's opening; a re-read starts at the part
+    and its last spoken part ends ``REREAD_PAUSE_MS`` after its speech, so its lead-in and closing silence stay out.
 
     Args:
         take: The recording holding the part.
         request_id: The part.
         cursor: The take's frames from a frame at or before the part's start and that frame's time; cutting from it
             instead of from the whole take keeps joining a long document linear.
+        reread: Whether the take re-reads parts left unspoken by an earlier one.
 
     Returns:
         The frames, the frames after them, their start on the recording timeline and their length.
     """
     data, data_ms = cursor
     order: int = take.spoken.index(request_id)
-    start_ms: float = 0.0 if order == 0 else take.timings[request_id].start_ms
+    timing: PartTiming = take.timings[request_id]
+    start_ms: float = 0.0 if order == 0 and not reread else timing.start_ms
     rest, dropped_ms = cut_before_ms(data, start_ms - data_ms)
     cut_ms: float = data_ms + dropped_ms
     if order + 1 == len(take.spoken):
-        return rest, b"", cut_ms, frames_duration_ms(rest)
+        if not reread:
+            return rest, b"", cut_ms, frames_duration_ms(rest)
+        after, length_ms = cut_before_ms(rest, timing.end_ms + REREAD_PAUSE_MS - cut_ms)
+        return rest[: len(rest) - len(after)], b"", cut_ms, length_ms
     following: PartTiming = take.timings[take.spoken[order + 1]]
     tail, length_ms = cut_before_ms(rest, following.start_ms - cut_ms)
     return rest[: len(rest) - len(tail)], tail, cut_ms, length_ms
@@ -456,6 +472,17 @@ def _playable(data: bytes) -> bytes:
         for frame in iter_frames(data)
         if frame.offset + frame.size <= len(data)
     )
+
+
+def _engine(config: ElevenReaderConfig) -> ElevenReaderTtsEngine:
+    """Return the engine recording in a Chrome window, so the owner sees what the page does."""
+    return ElevenReaderTtsEngine(config, browser_factory=_window)
+
+
+def _window(root: Path) -> ChromeSession:
+    from edp.engine.browser import ChromeSession  # noqa: PLC0415 - Playwright loads only once a recording starts
+
+    return ChromeSession(root, headless=False)
 
 
 def _sibling(base: Path, suffix: str) -> Path:

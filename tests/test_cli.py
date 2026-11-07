@@ -103,7 +103,7 @@ def test_bad_arguments_exit_with_usage_error_as_json(capsys: pytest.CaptureFixtu
 def test_record_writes_three_files_per_text_and_prints_results(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(reading, "ElevenReaderTtsEngine", lambda config: ScriptedEngine(tmp_path))
+    monkeypatch.setattr(reading, "_engine", lambda config: ScriptedEngine(tmp_path))
     first, second = _text(tmp_path, "jeden", "Raz.", "Dwa."), _text(tmp_path, "dwa", "Trzy.")
 
     value, code = _run(capsys, "record", str(first), str(second), "--home", str(tmp_path), "--out", str(tmp_path / "o"))
@@ -123,7 +123,7 @@ def test_record_with_part_silent_after_rereads_exits_incomplete(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     engine = ScriptedEngine(tmp_path, speaks_up_to={"Dwa.": 0})
-    monkeypatch.setattr(reading, "ElevenReaderTtsEngine", lambda config: engine)
+    monkeypatch.setattr(reading, "_engine", lambda config: engine)
 
     value, code = _run(capsys, "record", str(_text(tmp_path, "jeden", "Raz.", "Dwa.")), "--home", str(tmp_path))
 
@@ -135,7 +135,7 @@ def test_record_with_part_silent_after_rereads_exits_incomplete(
 def test_record_unreadable_line_exits_with_usage_error_naming_text_and_line(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(reading, "ElevenReaderTtsEngine", lambda config: ScriptedEngine(tmp_path))
+    monkeypatch.setattr(reading, "_engine", lambda config: ScriptedEngine(tmp_path))
     text = _text(tmp_path, "jeden", "Raz.", 'Dwa <break time="1s"/>.')
 
     value, code = _run(capsys, "record", str(text), "--home", str(tmp_path))
@@ -170,7 +170,7 @@ def test_record_unwritable_output_folder_exits_refused_before_recording(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     engine = ScriptedEngine(tmp_path)
-    monkeypatch.setattr(reading, "ElevenReaderTtsEngine", lambda config: engine)
+    monkeypatch.setattr(reading, "_engine", lambda config: engine)
     blocker = tmp_path / "plik"
     blocker.write_text("", encoding="utf-8")
     text = _text(tmp_path, "jeden", "Raz.")
@@ -228,7 +228,7 @@ def test_ctrl_c_during_second_text_keeps_results_of_the_first(
 ) -> None:
     engine = ScriptedEngine(tmp_path)
     engine.stops_at = {"Dwa.": KeyboardInterrupt()}
-    monkeypatch.setattr(reading, "ElevenReaderTtsEngine", lambda config: engine)
+    monkeypatch.setattr(reading, "_engine", lambda config: engine)
     first, second = _text(tmp_path, "jeden", "Raz."), _text(tmp_path, "dwa", "Dwa.")
 
     value, code = _run(capsys, "record", str(first), str(second), "--home", str(tmp_path))

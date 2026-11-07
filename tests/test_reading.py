@@ -8,10 +8,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import pytest
-from fakes import READ_ID, FakePage, FakeSession, FakeSite, ScriptedEngine, stream_frames
+from fakes import FRAME_MS, READ_ID, FakePage, FakeSession, FakeSite, ScriptedEngine, stream_frames
 
 from edp import reading
 from edp.engine import service
+from edp.engine.api_backend import refused_error
 from edp.errors import OutputError, TtsAuthError, TtsInputError, TtsTimeoutError
 from edp.reading import read_id_from_url, record, text_lines
 from edp.utils.mp3_frames import frames_duration_ms, iter_frames, splice_times
@@ -44,7 +45,7 @@ def _text(tmp_path: Path, *lines: str, name: str = "rozdzial") -> Path:
 
 
 def _use(monkeypatch: pytest.MonkeyPatch, engine: ScriptedEngine) -> None:
-    monkeypatch.setattr(reading, "ElevenReaderTtsEngine", lambda config: engine)
+    monkeypatch.setattr(reading, "_engine", lambda config: engine)
 
 
 def _fills(data: bytes) -> list[int]:
@@ -333,6 +334,30 @@ def test_record_keeps_audio_streamed_before_the_first_part(tmp_path: Path, monke
     assert result.parts[0].start_ms > 0
 
 
+def test_record_reread_part_joins_without_the_lead_in_and_closing_silence_of_its_recording(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use(monkeypatch, ScriptedEngine(tmp_path, lead_frames=3, speaks_up_to={"Dwa.": 2, "Pięć.": 2}))
+
+    (result,) = record(_text(tmp_path, *LINES), home=tmp_path)
+
+    assert _fills(result.mp3.read_bytes()) == [99, 1, 2, 11, 3, 4, 12]
+    assert result.duration_ms <= result.parts[-1].end_ms + reading.REREAD_PAUSE_MS + FRAME_MS
+
+
+def test_record_app_check_refusal_fails_at_once_without_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sleeps: list[float]
+) -> None:
+    engine = ScriptedEngine(tmp_path, failures=[refused_error("AppCheck: 403 error.")])
+    _use(monkeypatch, engine)
+
+    with pytest.raises(TtsAuthError, match="App Check"):
+        record(_text(tmp_path, *LINES), home=tmp_path)
+
+    assert engine.calls == 1
+    assert sleeps == []
+
+
 def test_record_transient_failure_is_retried_after_a_pause(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sleeps: list[float]
 ) -> None:
@@ -409,7 +434,7 @@ def test_record_chunk_streamed_before_play_is_in_mp3_and_words(tmp_path: Path, m
     texts = ("Pierwsza kwestia.", "Druga kwestia.")
     site = FakeSite(texts=texts, page_type=_PlayedBeforePlay)
     site.frames = stream_frames(texts)
-    monkeypatch.setattr(service, "headless_session", _fake_browser(site))
+    monkeypatch.setattr(reading, "_window", _fake_browser(site))
 
     (result,) = record(_text(tmp_path, *texts), home=tmp_path)
 
@@ -423,7 +448,7 @@ def test_record_chunk_streamed_before_play_is_in_mp3_and_words(tmp_path: Path, m
 @pytest.mark.usefixtures("fast_engine")
 def test_download_writes_three_files_without_parts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     site = FakeSite(texts=("Pierwsza kwestia. Druga kwestia.",), player_done=True)
-    monkeypatch.setattr(service, "headless_session", _fake_browser(site))
+    monkeypatch.setattr(reading, "_window", _fake_browser(site))
     out = tmp_path / "ksiazka.v2.mp3"
 
     result = reading.download(f"https://elevenreader.io/reader/library/{READ_ID}", out=out, home=tmp_path)
@@ -452,7 +477,7 @@ def test_download_resumed_document_is_refused_without_retry_or_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sleeps: list[float]
 ) -> None:
     site = FakeSite(texts=("Pierwsza kwestia.",), player_done=True, start_position=57)
-    monkeypatch.setattr(service, "headless_session", _fake_browser(site))
+    monkeypatch.setattr(reading, "_window", _fake_browser(site))
     out = tmp_path / "wyniki" / "ksiazka.mp3"
 
     with pytest.raises(TtsInputError) as error:
