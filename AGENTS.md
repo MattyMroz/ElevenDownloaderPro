@@ -51,7 +51,14 @@ node --test userscript/
 
 - Katalog domowy `edp` (`--home`, `EDP_HOME`, domyślnie `~/.edp`) trzyma `chrome-profile/`, `session.json` i
   `chrome.lock`; `restrict_directory` zawęża jego uprawnienia przy starcie. Drugi proces na tym samym profilu dostaje
-  `ChromeBusyError`.
+  od razu trwały `ChromeBusyError`. Przerwanie komendy z zewnątrz (twarde zabicie powłoki) zostawia działający `edp`
+  i jego Chrome, które trzymają profil, dopóki ich nie zabijesz.
+- `edp record` i `edp download` nagrywają w widocznym oknie Chrome (`reading._window`); testy podmieniają je w
+  `tests/conftest.py`, więc żaden test nie otwiera prawdziwej przeglądarki.
+- Firebase App Check strony potrafi odrzucić profil (konsola: `AppCheck: 403`); strona nie otwiera wtedy strumienia i
+  blokuje profil na dobę. Silnik i userscript wykrywają to z konsoli (`APP_CHECK_REFUSAL`, `appCheckRefusal`) i od
+  razu kończą błędem. Obejść tej oceny nie wolno; pomaga nowy profil (`edp login --home`) albo userscript w zwykłym
+  Chrome.
 - Głos i tempo to ustawienia całego konta ElevenReader (`user_config`): `edp` i AniShift na tym samym koncie naraz
   nadpisują sobie głos i limit 2 strumieni na urządzenie.
 - Ten sam tekst z tym samym głosem serwer oddaje z cache jako identyczne MP3; nowe ujęcie wymaga zmienionego tekstu.

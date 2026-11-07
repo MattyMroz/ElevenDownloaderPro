@@ -27,7 +27,11 @@ edp download https://elevenreader.io/reader/library/<read_id> --out book.mp3
   `silent` and the command exits with 3.
 - Square brackets are read as text; `--tags` sends them as Eleven v4 audio tags.
 - Every command prints one JSON value on stdout and logs on stderr. `edp --help` lists the exit codes.
-- The Chrome profile and session live in `~/.edp` (`--home` or `EDP_HOME` change it).
+- The Chrome profile and session live in `~/.edp` (`--home` or `EDP_HOME` change it). Recording opens a Chrome window
+  so you can see the page; one profile serves one `edp` process at a time.
+- If ElevenReader's App Check (Google's bot check) refuses the profile, the page sends no audio and blocks the profile
+  for a day; `edp` stops at once with that message. Sign in on a new profile (`edp login --home <new folder>`) or use
+  the userscript in your own Chrome.
 
 ## Userscript
 

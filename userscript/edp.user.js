@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ElevenDownloaderPro
 // @namespace    https://github.com/MattyMroz/ElevenDownloaderPro
-// @version      2.0.1
+// @version      2.0.2
 // @description  Records the ElevenReader audio stream from its first frame and saves MP3, word timings (.json) and sentence subtitles (.srt); can also upload pasted text, record it and restore the account afterwards.
 // @author       Mateusz Mróz
 // @match        https://elevenreader.io/*
@@ -17,7 +17,7 @@
 
     // ── Constants ────────────────────────────────────────────────────────────
 
-    const VERSION = "2.0.1";
+    const VERSION = "2.0.2";
     const VOICES = Object.freeze([
         Object.freeze({ alias: "fronczewski", label: "Piotr Fronczewski", voice_id: "T5l58N8RNz5DKoClpKIJ" }),
         Object.freeze({ alias: "adam", label: "Adam", voice_id: "hIssydxXZ1WuDorjx6Ic" }),
@@ -43,6 +43,7 @@
     const START_TIMEOUT_S = 60.0;
     const PLAY_ATTEMPTS = 3;
     const STALL_S = 300.0;
+    const APP_CHECK_REFUSAL = /AppCheck: \d{3}|appCheck\//;
     const POLL_S = 1.0;
     const CLEANUP_STEP_TIMEOUT_S = 15.0;
     const JOB_KEY = "edp.job";
@@ -421,6 +422,22 @@
             }
             this.expect = null;
             return 0;
+        }
+    }
+
+    function appCheckRefusal(args) {
+        const text = Array.from(args, (arg) => (arg instanceof Error ? arg.message : String(arg))).join(" ");
+        return APP_CHECK_REFUSAL.test(text) ? text : null;
+    }
+
+    function installConsoleHook(win, onRefusal) {
+        for (const level of ["error", "warn"]) {
+            const native = win.console[level];
+            win.console[level] = function (...args) {
+                const refusal = appCheckRefusal(args);
+                if (refusal !== null) onRefusal(refusal);
+                return native.apply(this, args);
+            };
         }
     }
 
@@ -841,6 +858,7 @@
             busy: false,
             messages: [],
             v2: false,
+            refusal: null,
             addWaiter: null,
         };
         let panel = null;
@@ -904,6 +922,7 @@
             }
         };
         guard("stream hook", () => installSocketHook(win, onStream, (error) => report("error", "stream hook failed", error)), false);
+        guard("console hook", () => installConsoleHook(win, onRefusal), undefined);
         const setPageSpeed = guard(
             "page speed hook",
             () => installSpeedHook(win, (error) => report("error", "page speed could not be set", error)),
@@ -1011,6 +1030,15 @@
             socket.addEventListener("close", () => render());
             setPageSpeed(PAGE_SPEED);
             render();
+        }
+
+        function onRefusal(text) {
+            if (state.refusal !== null) return;
+            state.refusal = text;
+            const message =
+                "ElevenReader App Check refused this browser, so the page opens no audio stream; the page blocks it for a day";
+            if (state.job !== null) stopJob(message);
+            else report("error", message);
         }
 
         function onSent(recording, data) {
@@ -1187,7 +1215,7 @@
                         setPageSpeed(PAGE_SPEED);
                         play.click();
                         playedAt = now;
-                        plays = 1;
+                        plays = (job.reloads ?? 0) + 1;
                     } else if (now - startedAt >= READY_TIMEOUT_S * 1000) {
                         stopJob("the document never became playable");
                     }
@@ -1200,10 +1228,10 @@
                         stopJob("ElevenReader sent no audio after Play");
                         return;
                     }
-                    const play = findButton(doc, "Play");
-                    if (play !== null) play.click();
-                    plays += 1;
-                    playedAt = now;
+                    clearInterval(timer);
+                    report("warning", "ElevenReader sent no audio; the document is opened again");
+                    writeStored("sessionStorage", JOB_KEY, { ...job, reloads: plays });
+                    win.location.reload();
                     return;
                 }
                 if (recording.recorder.audioBytes !== lastBytes) {
@@ -1463,6 +1491,7 @@
             readIdFromStreamUrl,
             voiceFromUrl,
             sentPosition,
+            appCheckRefusal,
             accountSettings,
             withSettings,
         };

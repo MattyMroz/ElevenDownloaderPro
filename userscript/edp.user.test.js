@@ -687,3 +687,25 @@ describe("fixtures from Python", () => {
         );
     });
 });
+
+describe("App Check refusal", () => {
+    test("console text of a refused App Check is the refusal", () => {
+        const refusal = edp.appCheckRefusal([
+            "Failed to initialize AppCheck:",
+            new Error("AppCheck: 403 error. Attempts allowed again after 01d:00m:00s (appCheck/initial-throttle)."),
+        ]);
+        assert.match(refusal, /AppCheck: 403 error/);
+    });
+
+    test("ordinary console text is no refusal", () => {
+        assert.equal(edp.appCheckRefusal(["audioStream::handleAudioContextStateChange running"]), null);
+    });
+
+    test("the userscript and Python watch for the same console text", () => {
+        const constants = fs.readFileSync(path.join(__dirname, "..", "src", "edp", "engine", "constants.py"), "utf8");
+        const python = constants.match(/APP_CHECK_REFUSAL: Final\[str\] = r"([^"]+)"/)[1];
+        const script = fs.readFileSync(path.join(__dirname, "edp.user.js"), "utf8");
+        const javascript = script.match(/const APP_CHECK_REFUSAL = \/(.+)\/;/)[1];
+        assert.equal(javascript, new RegExp(python).source);
+    });
+});
